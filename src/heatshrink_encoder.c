@@ -340,7 +340,7 @@ static HSE_state st_yield_br_index(heatshrink_encoder *hse,
         if (push_outgoing_bits(hse, oi) > 0) {
             return HSES_YIELD_BR_INDEX; /* continue */
         } else {
-            hse->outgoing_bits = hse->match_length - 1;
+            hse->outgoing_bits = hse->match_length - 3;
             hse->outgoing_bits_count = HEATSHRINK_ENCODER_LOOKAHEAD_BITS(hse);
             return HSES_YIELD_BR_LENGTH; /* done */
         }
@@ -402,7 +402,7 @@ static uint16_t get_input_buffer_size(heatshrink_encoder *hse) {
 
 static uint16_t get_lookahead_size(heatshrink_encoder *hse) {
     (void)hse;
-    return (uint16_t)(1U << HEATSHRINK_ENCODER_LOOKAHEAD_BITS(hse));
+    return (uint16_t)(1U << HEATSHRINK_ENCODER_LOOKAHEAD_BITS(hse)) + 2;
 }
 
 static void do_indexing(heatshrink_encoder *hse) {

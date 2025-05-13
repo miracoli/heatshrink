@@ -261,7 +261,7 @@ static HSD_state st_backref_count_lsb(heatshrink_decoder *hsd) {
     LOG("-- backref count (lsb), got 0x%04x (+1)\n", bits);
     if (bits == NO_BITS) { return HSDS_BACKREF_COUNT_LSB; }
     hsd->output_count |= bits;
-    hsd->output_count++;
+    hsd->output_count += 3;
     return HSDS_YIELD_BACKREF;
 }
 
