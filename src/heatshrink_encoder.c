@@ -340,7 +340,7 @@ static HSE_state st_yield_br_index(heatshrink_encoder *hse,
         if (push_outgoing_bits(hse, oi) > 0) {
             return HSES_YIELD_BR_INDEX; /* continue */
         } else {
-            hse->outgoing_bits = hse->match_length - 3;
+            hse->outgoing_bits = hse->match_length - (1 +((1 + HEATSHRINK_ENCODER_WINDOW_BITS(hse) + HEATSHRINK_ENCODER_LOOKAHEAD_BITS(hse)) / BITS_LITERAL));
             hse->outgoing_bits_count = HEATSHRINK_ENCODER_LOOKAHEAD_BITS(hse);
             return HSES_YIELD_BR_LENGTH; /* done */
         }
@@ -402,7 +402,7 @@ static uint16_t get_input_buffer_size(heatshrink_encoder *hse) {
 
 static uint16_t get_lookahead_size(heatshrink_encoder *hse) {
     (void)hse;
-    return (uint16_t)(1U << HEATSHRINK_ENCODER_LOOKAHEAD_BITS(hse)) + 2;
+    return (uint16_t)(1U << HEATSHRINK_ENCODER_LOOKAHEAD_BITS(hse)) + ((1 + HEATSHRINK_ENCODER_WINDOW_BITS(hse) + HEATSHRINK_ENCODER_LOOKAHEAD_BITS(hse)) / BITS_LITERAL );
 }
 
 static void do_indexing(heatshrink_encoder *hse) {
@@ -520,8 +520,8 @@ static uint16_t find_longest_match(heatshrink_encoder *hse, uint16_t start,
     * compare match_maxlen directly to break_even; this avoids overflow.
     *
     * With the minimum window and look-ahead sizes (4 bits and 3 bits),
-    * break_even can be zero.  That’s fine—when break_even == 0, even a
-    * one-byte match is still encoded as a back-reference that saves
+    * break_even can be zero.  That’s fine — when break_even == 0, even
+    * a one-byte match is still encoded as a back-reference that saves
     * one bit versus encoding the byte as a literal.
     */
     if (match_maxlen > break_even) {
