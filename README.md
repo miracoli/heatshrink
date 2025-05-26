@@ -30,6 +30,11 @@ Dynamic allocation is used by default, but in an embedded context, you
 probably want to statically allocate the encoder/decoder. Set
 `HEATSHRINK_DYNAMIC_ALLOC` to 0 in `heatshrink_config.h`.
 
+Note that the command line program defaults to compressing with default
+parameters when run without any arguments -- to see usage info, use:
+
+    $ heatshrink -h
+
 
 ### Basic Usage
 
@@ -40,7 +45,7 @@ options.)
 
 2. Use `sink` to sink an input buffer into the state machine. The
 `input_size` pointer argument will be set to indicate how many bytes of
-the input buffer were actually consumed. (If 0 bytes were conusmed, the
+the input buffer were actually consumed. (If 0 bytes were consumed, the
 buffer is full.)
 
 3. Use `poll` to move output from the state machine into an output
@@ -72,6 +77,13 @@ heatshrink has a couple configuration options, which impact its resource
 usage and how effectively it can compress data. These are set when
 dynamically allocating an encoder or decoder, or in `heatshrink_config.h`
 if they are statically allocated.
+
+Note that the configuration parameters are not explicitly represented in
+the compressed output -- in most use cases, either the configuration
+settings will remain constant and can be implicit, or there will be some
+kind of project-specific protocol envelope / header to contain that
+information.
+
 
 - `window_sz2`, `-w` in the CLI: Set the window size to 2^W bytes.
 

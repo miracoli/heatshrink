@@ -1,0 +1,19 @@
+name: CI
+
+on:
+  push:
+    branches: [ develop, main, master ]
+  pull_request:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        compiler: [gcc, clang]
+    env:
+      CC: ${{ matrix.compiler }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build and test
+        run: make ci DISABLE_FUZZ=1
