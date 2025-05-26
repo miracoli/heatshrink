@@ -50,8 +50,8 @@ CORPUS_URL=	http://corpus.canterbury.ac.nz/resources/${CORPUS_ARCHIVE}
 BENCHMARK_OUT=	benchmark_out
 
 ## Uncomment one of these.
-DL=	curl -o ${CORPUS_ARCHIVE}
-#DL=	wget -O ${CORPUS_ARCHIVE}
+#DL=    curl -o ${CORPUS_ARCHIVE}
+DL=     wget -O ${CORPUS_ARCHIVE}
 
 bench: heatshrink corpus
 	mkdir -p ${BENCHMARK_OUT}
