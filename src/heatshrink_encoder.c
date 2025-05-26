@@ -512,15 +512,18 @@ static uint16_t find_longest_match(heatshrink_encoder *hse, uint16_t start,
     }
 #endif
     
-    size_t bits_backref = 1 + HEATSHRINK_ENCODER_WINDOW_BITS(hse) + HEATSHRINK_ENCODER_LOOKAHEAD_BITS(hse);
-    enum { BITS_LITERAL = 9 }; /* One encoded literal costs 8 data bits + 1 tag bit = 9 bits. */
-    size_t break_even = bits_backref / BITS_LITERAL;
-    break_even += !break_even; /* ensures break_even ≥ 1 */
+    const size_t bits_backref = 1 + HEATSHRINK_ENCODER_WINDOW_BITS(hse) + HEATSHRINK_ENCODER_LOOKAHEAD_BITS(hse);
+    const size_t break_even = bits_backref / BITS_LITERAL;
 
-    /* Instead of comparing against BITS_LITERAL*match_maxlen, compare
-     * match_maxlen against bits_backref/BITS_LITERAL to avoid overflow.
-     * Since MIN_WINDOW_BITS and MIN_LOOKAHEAD_BITS are 4 and 3, respectively,
-     * the division above might yield 0, so we ensure break_even ≥ 1. */
+    /*
+    * Instead of comparing BITS_LITERAL * match_maxlen to bits_backref,
+    * compare match_maxlen directly to break_even; this avoids overflow.
+    *
+    * With the minimum window and look-ahead sizes (4 bits and 3 bits),
+    * break_even can be zero.  That’s fine—when break_even == 0, even a
+    * one-byte match is still encoded as a back-reference that saves
+    * one bit versus encoding the byte as a literal.
+    */
     if (match_maxlen > break_even) {
         LOG("-- best match: %u bytes at -%u\n",
             match_maxlen, end - match_index);
