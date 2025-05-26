@@ -5,6 +5,10 @@
 #include "heatshrink_decoder.h"
 #include "greatest.h"
 
+#ifndef HEATSHRINK_DISABLE_FUZZING
+#define HEATSHRINK_DISABLE_FUZZING 0
+#endif
+
 #if HEATSHRINK_DYNAMIC_ALLOC
 #error HEATSHRINK_DYNAMIC_ALLOC must be false for static allocation test suite.
 #endif
@@ -140,7 +144,7 @@ TEST pseudorandom_data_should_match(uint32_t size, uint32_t seed) {
 }
 
 SUITE(integration) {
-#if __STDC_VERSION__ >= 19901L
+#if __STDC_VERSION__ >= 19901L && !HEATSHRINK_DISABLE_FUZZING
     for (uint32_t size=1; size < 64*1024; size <<= 1) {
         if (GREATEST_IS_VERBOSE()) printf(" -- size %u\n", size);
             for (uint32_t seed=1; seed<=100; seed++) {

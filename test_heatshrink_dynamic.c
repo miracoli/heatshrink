@@ -6,6 +6,10 @@
 #include "heatshrink_decoder.h"
 #include "greatest.h"
 
+#ifndef HEATSHRINK_DISABLE_FUZZING
+#define HEATSHRINK_DISABLE_FUZZING 0
+#endif
+
 #if !HEATSHRINK_DYNAMIC_ALLOC
 #error Must set HEATSHRINK_DYNAMIC_ALLOC to 1 for dynamic allocation test suite.
 #endif
@@ -962,7 +966,7 @@ SUITE(integration) {
     RUN_TEST(data_without_duplication_should_match_with_absurdly_tiny_buffers);
     RUN_TEST(data_with_simple_repetition_should_match_with_absurdly_tiny_buffers);
     
-#if __STDC_VERSION__ >= 19901L
+#if __STDC_VERSION__ >= 19901L && !HEATSHRINK_DISABLE_FUZZING
     printf("\n\nFuzzing (single-byte sizes):\n");
     for (uint8_t lsize=3; lsize < 8; lsize++) {
         for (uint32_t size=1; size < 128*1024L; size <<= 1) {
