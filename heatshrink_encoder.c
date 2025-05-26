@@ -285,6 +285,40 @@ static HSE_state st_step_search(heatshrink_encoder *hse) {
     uint16_t match_pos = find_longest_match(hse,
         start, end, max_possible, &match_length);
     
+          /* --- Lazy match: if the current candidate is only barely long enough,
+   *     peek at the next position; take the match only when it is at
+   *     least as long as the best one starting one byte later.           */
+  if (match_length != MATCH_NOT_FOUND) {
+      /* current break-even threshold                                   */
+      const size_t bits_br = 1 + HEATSHRINK_ENCODER_WINDOW_BITS(hse)
+                           + HEATSHRINK_ENCODER_LOOKAHEAD_BITS(hse);
+      const size_t break_even = bits_br / BITS_LITERAL;
+      //break_even += !break_even;          /* ensure ≥1 */
+
+ //     if (match_length > break_even) {    /* only matters when we might emit */
+          /* look one byte ahead */
+          uint16_t next_len = 0;
+          if (msi + 1 < hse->input_size) {
+              uint16_t next_msi  = msi + 1;
+              uint16_t next_end  = input_offset + next_msi;
+              uint16_t next_start = next_end - window_length;
+              uint16_t next_max = lookahead_sz;
+              if (hse->input_size - next_msi < lookahead_sz)
+                  next_max = hse->input_size - next_msi;
+
+              (void)find_longest_match(hse, next_start, next_end,
+                                       next_max, &next_len);
+          }
+          if (next_len > match_length) {
+              /* A better match starts next byte: output literal now.   */
+              match_pos = MATCH_NOT_FOUND;
+              match_length = 0;
+          }
+  //    }
+  }
+  /* --- end Lazy match ------------------------------------------------- */
+
+
     if (match_pos == MATCH_NOT_FOUND) {
         LOG("ss Match not found\n");
         hse->match_scan_index++;
