@@ -20,6 +20,10 @@ THEFT_INC=	-I${THEFT_PATH}/include/
 
 INC=		-I${INCLUDE} -I${SRC}
 CFLAGS += -std=c99 -g ${WARN} ${THEFT_INC} ${INC} ${OPTIMIZE}
+# Disable fuzzing tests when DISABLE_FUZZ is set
+ifeq ($(DISABLE_FUZZ),1)
+CFLAGS += -DHEATSHRINK_DISABLE_FUZZING=1
+endif
 
 all: ${BUILD}/heatshrink test_runners libraries
 
