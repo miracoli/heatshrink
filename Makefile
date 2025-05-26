@@ -21,6 +21,10 @@ THEFT_INC=	-I${THEFT_PATH}/include/
 INC=		-I${INCLUDE} -I${SRC}
 CFLAGS += -std=c99 -g ${WARN} ${THEFT_INC} ${INC} ${OPTIMIZE}
 
+ifeq ($(DISABLE_FUZZ),1)
+CFLAGS += -DHEATSHRINK_DISABLE_FUZZING=1
+endif
+
 all: ${BUILD}/heatshrink test_runners libraries
 
 libraries: ${BUILD}/libheatshrink_static.a ${BUILD}/libheatshrink_dynamic.a
