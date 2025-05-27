@@ -288,11 +288,11 @@ static HSE_state st_step_search(heatshrink_encoder *hse) {
           /* --- Lazy match: if the current candidate is only barely long enough,
    *     peek at the next position; take the match only when it is at
    *     least as long as the best one starting one byte later.           */
-  if (match_length != MATCH_NOT_FOUND) {
+  if (match_pos != MATCH_NOT_FOUND && match_length < max_possible) {
       /* current break-even threshold                                   */
-      const size_t bits_br = 1 + HEATSHRINK_ENCODER_WINDOW_BITS(hse)
-                           + HEATSHRINK_ENCODER_LOOKAHEAD_BITS(hse);
-      const size_t break_even = bits_br / BITS_LITERAL;
+    //  const size_t bits_br = 1 + HEATSHRINK_ENCODER_WINDOW_BITS(hse)
+       //                    + HEATSHRINK_ENCODER_LOOKAHEAD_BITS(hse);
+   //   const size_t break_even = bits_br / BITS_LITERAL;
       //break_even += !break_even;          /* ensure ≥1 */
 
  //     if (match_length > break_even) {    /* only matters when we might emit */
