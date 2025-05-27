@@ -23,8 +23,8 @@ rm -f benchmark.output
 
 # Run several combinations of -w W -l L,
 # note compression ratios and check uncompressed output matches input
-for W in 6 7 8 9 10 11 12; do
-    for L in 5 6 7 8; do
+for W in 4 5 6 7 8 9 10 11 12 13 14; do
+    for L in 3 4 5 6 7 8 9 10 11 12 13; do
         if [ $L -lt $W ]; then
             for f in ${FILES}
             do 
