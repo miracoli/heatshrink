@@ -309,7 +309,7 @@ static HSE_state st_step_search(heatshrink_encoder *hse) {
               (void)find_longest_match(hse, next_start, next_end,
                                        next_max, &next_len);
           }
-          if (next_len > match_length + 1) {
+          if (next_len > match_length + 2) {
               /* A better match starts next byte: output literal now.   */
               match_pos = MATCH_NOT_FOUND;
               match_length = 0;
@@ -542,7 +542,7 @@ static uint16_t find_longest_match(heatshrink_encoder *hse, uint16_t start,
 #endif
     
     const size_t bits_backref = 1 + HEATSHRINK_ENCODER_WINDOW_BITS(hse) + HEATSHRINK_ENCODER_LOOKAHEAD_BITS(hse);
-    const size_t break_even = bits_backref / /*BITS_LITERAL*/ 8;
+    const size_t break_even = bits_backref / BITS_LITERAL;
 
     /*
     * Instead of comparing BITS_LITERAL * match_maxlen to bits_backref,
