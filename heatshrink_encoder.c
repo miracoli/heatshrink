@@ -309,7 +309,7 @@ static HSE_state st_step_search(heatshrink_encoder *hse) {
               (void)find_longest_match(hse, next_start, next_end,
                                        next_max, &next_len);
           }
-          if (next_len > match_length) {
+          if (next_len > match_length + 1) {
               /* A better match starts next byte: output literal now.   */
               match_pos = MATCH_NOT_FOUND;
               match_length = 0;
