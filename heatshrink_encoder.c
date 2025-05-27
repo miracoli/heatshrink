@@ -312,7 +312,7 @@ static HSE_state st_step_search(heatshrink_encoder *hse) {
           }
          uint8_t free = (hse->bit_index == 0x80) ? 8 : __builtin_ctz(hse->bit_index);
          uint8_t needed_gain = (free == 1) ? 3 : 2; 
-          if (next_pos != MATCH_NOT_FOUND && next_len > match_length + needed_gain) {
+              if (next_pos != MATCH_NOT_FOUND && next_len >= match_length + needed_gain) {
               /* A better match starts next byte: output literal now.   */
               match_pos = MATCH_NOT_FOUND;
               match_length = 0;
