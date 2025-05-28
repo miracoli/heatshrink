@@ -508,7 +508,7 @@ static uint16_t find_longest_match(heatshrink_encoder *hse, uint16_t start,
 #endif
     
     const size_t bits_backref = 1 + HEATSHRINK_ENCODER_WINDOW_BITS(hse) + HEATSHRINK_ENCODER_LOOKAHEAD_BITS(hse);
-    const size_t break_even = bits_backref / BITS_LITERAL;
+    const size_t break_even = bits_backref == 8 ? 0 : bits_backref / /*BITS_LITERAL*/ 8;
 
     /*
     * Instead of comparing BITS_LITERAL * match_maxlen to bits_backref,
