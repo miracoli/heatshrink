@@ -121,7 +121,7 @@ static uint8_t run_decompress_test(void) {
             if (poll_res == HSDR_POLL_EMPTY) {
                 break;
             }
-            if (poll_res != HSDR_POLL_MORE || produced > INPUT_LEN) {
+            if (poll_res != HSDR_POLL_MORE || produced >= INPUT_LEN) {
                 return 8;
             }
         }
@@ -137,7 +137,7 @@ static uint8_t run_decompress_test(void) {
             if (poll_res == HSDR_POLL_EMPTY) {
                 break;
             }
-            if (poll_res != HSDR_POLL_MORE || produced > INPUT_LEN) {
+            if (poll_res != HSDR_POLL_MORE || produced >= INPUT_LEN) {
                 return 9;
             }
         }

@@ -26,7 +26,12 @@ test_runners: test_heatshrink_static test_heatshrink_dynamic
 test: test_runners
 	./test_heatshrink_static
 	./test_heatshrink_dynamic
-	./scripts/run_avrora_cycle_test.sh
+	@if command -v avr-gcc >/dev/null 2>&1 && command -v java >/dev/null 2>&1 \
+		&& [ -n "$$AVRORA_JAR" ] && [ -f "$$AVRORA_JAR" ]; then \
+		./scripts/run_avrora_cycle_test.sh; \
+	else \
+		echo "WARNING: skipping Avrora cycle test (need avr-gcc, java, and AVRORA_JAR=<path-to-avrora.jar>)"; \
+	fi
 ci: test
 
 clean:
