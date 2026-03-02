@@ -26,6 +26,7 @@ test_runners: test_heatshrink_static test_heatshrink_dynamic
 test: test_runners
 	./test_heatshrink_static
 	./test_heatshrink_dynamic
+	./scripts/run_avrora_cycle_test.sh
 ci: test
 
 clean:
@@ -123,4 +124,3 @@ libheatshrink_dynamic.a: ${DYNAMIC_OBJS}
 
 *.os: Makefile *.h
 *.od: Makefile *.h
-
