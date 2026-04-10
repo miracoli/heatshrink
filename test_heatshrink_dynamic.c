@@ -952,12 +952,143 @@ TEST sixty_four_k(void) {
     return compress_and_expand_and_check(input, size, &cfg);
 }
 
+/* Regression: finishing with input_size == 0 in st_step_search would
+ * previously cause an unsigned integer underflow (0 - 1 wrapping to 65535),
+ * which made the search termination condition never fire, hanging the encoder.
+ * Fixed by adding an explicit early-exit to HSES_FLUSH_BITS when fin && input_size == 0. */
+TEST regression_finish_with_empty_input_should_not_get_stuck(void) {
+    heatshrink_encoder *hse = heatshrink_encoder_alloc(8, 7);
+    ASSERT(hse);
+
+    uint8_t output[64];
+    size_t output_sz = 0;
+
+    /* Call finish without sinking any data -- input_size stays 0. */
+    HSE_finish_res fres = heatshrink_encoder_finish(hse);
+    ASSERT_EQ(HSER_FINISH_MORE, fres);
+
+    /* poll must not hang and must report empty output. */
+    HSE_poll_res pres = heatshrink_encoder_poll(hse, output, sizeof(output), &output_sz);
+    ASSERT_EQ(HSER_POLL_EMPTY, pres);
+
+    /* With no bits written the flush produces no bytes. */
+    ASSERT_EQ(0, output_sz);
+
+    /* Encoder must now report it is done. */
+    ASSERT_EQ(HSER_FINISH_DONE, heatshrink_encoder_finish(hse));
+
+    heatshrink_encoder_free(hse);
+    PASS();
+}
+
+TEST regression_finish_with_empty_input_various_window_sizes(void) {
+    /* Exercise the fix across window/lookahead size combinations, including
+     * the minimum sizes, to guard against any size-dependent underflow. */
+    uint8_t window_sizes[]   = {HEATSHRINK_MIN_WINDOW_BITS, 6, 8, 11,
+                                 HEATSHRINK_MAX_WINDOW_BITS};
+    uint8_t lookahead_sizes[] = {HEATSHRINK_MIN_LOOKAHEAD_BITS, 3, 4, 5, 8};
+
+    for (size_t wi = 0; wi < sizeof(window_sizes); wi++) {
+        uint8_t wsz = window_sizes[wi];
+        /* Clamp lookahead so it is always less than window. */
+        uint8_t lsz = lookahead_sizes[wi] < wsz
+                      ? lookahead_sizes[wi]
+                      : wsz - 1;
+
+        heatshrink_encoder *hse = heatshrink_encoder_alloc(wsz, lsz);
+        ASSERT(hse);
+
+        uint8_t output[64];
+        size_t output_sz = 0;
+
+        HSE_finish_res fres = heatshrink_encoder_finish(hse);
+        ASSERT_EQ(HSER_FINISH_MORE, fres);
+
+        HSE_poll_res pres = heatshrink_encoder_poll(hse, output, sizeof(output),
+                                                    &output_sz);
+        ASSERT_EQ(HSER_POLL_EMPTY, pres);
+        ASSERT_EQ(0, output_sz);
+        ASSERT_EQ(HSER_FINISH_DONE, heatshrink_encoder_finish(hse));
+
+        heatshrink_encoder_free(hse);
+    }
+    PASS();
+}
+
+TEST regression_finish_with_empty_input_after_reset_should_complete(void) {
+    /* After a successful compress+reset cycle, finishing with no new input
+     * should again hit the input_size==0 path cleanly. */
+    heatshrink_encoder *hse = heatshrink_encoder_alloc(8, 7);
+    ASSERT(hse);
+
+    /* First, perform a normal compression so the encoder goes through its
+     * full state machine, then reset it. */
+    uint8_t input[] = {'h', 'e', 'l', 'l', 'o'};
+    uint8_t comp[64];
+    size_t count = 0, polled = 0;
+
+    ASSERT_EQ(HSER_SINK_OK, heatshrink_encoder_sink(hse, input, sizeof(input), &count));
+    ASSERT_EQ(sizeof(input), count);
+    ASSERT_EQ(HSER_FINISH_MORE, heatshrink_encoder_finish(hse));
+
+    HSE_poll_res pres;
+    do {
+        pres = heatshrink_encoder_poll(hse, &comp[polled],
+                                       sizeof(comp) - polled, &count);
+        ASSERT(pres >= 0);
+        polled += count;
+    } while (pres == HSER_POLL_MORE);
+    ASSERT_EQ(HSER_FINISH_DONE, heatshrink_encoder_finish(hse));
+
+    /* Reset and now finish immediately with no input. */
+    heatshrink_encoder_reset(hse);
+
+    uint8_t output[64];
+    size_t output_sz = 0;
+
+    HSE_finish_res fres = heatshrink_encoder_finish(hse);
+    ASSERT_EQ(HSER_FINISH_MORE, fres);
+
+    pres = heatshrink_encoder_poll(hse, output, sizeof(output), &output_sz);
+    ASSERT_EQ(HSER_POLL_EMPTY, pres);
+    ASSERT_EQ(0, output_sz);
+    ASSERT_EQ(HSER_FINISH_DONE, heatshrink_encoder_finish(hse));
+
+    heatshrink_encoder_free(hse);
+    PASS();
+}
+
+TEST regression_finish_with_empty_input_minimum_window(void) {
+    /* Boundary test: minimum allowed window and lookahead sizes. */
+    heatshrink_encoder *hse = heatshrink_encoder_alloc(
+        HEATSHRINK_MIN_WINDOW_BITS, HEATSHRINK_MIN_LOOKAHEAD_BITS);
+    ASSERT(hse);
+
+    uint8_t output[16];
+    size_t output_sz = 0;
+
+    ASSERT_EQ(HSER_FINISH_MORE, heatshrink_encoder_finish(hse));
+    ASSERT_EQ(HSER_POLL_EMPTY,
+              heatshrink_encoder_poll(hse, output, sizeof(output), &output_sz));
+    ASSERT_EQ(0, output_sz);
+    ASSERT_EQ(HSER_FINISH_DONE, heatshrink_encoder_finish(hse));
+
+    heatshrink_encoder_free(hse);
+    PASS();
+}
+
 SUITE(regression) {
     // Regressions from fuzzing
     RUN_TEST(small_input_buffer_should_not_impact_decoder_correctness);
     RUN_TEST(regression_backreference_counters_should_not_roll_over);
     RUN_TEST(regression_index_fail);
     RUN_TEST(sixty_four_k);
+
+    // Regression: unsigned underflow when finish() called with no input
+    RUN_TEST(regression_finish_with_empty_input_should_not_get_stuck);
+    RUN_TEST(regression_finish_with_empty_input_various_window_sizes);
+    RUN_TEST(regression_finish_with_empty_input_after_reset_should_complete);
+    RUN_TEST(regression_finish_with_empty_input_minimum_window);
 }
 
 SUITE(integration) {
