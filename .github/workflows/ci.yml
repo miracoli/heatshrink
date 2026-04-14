@@ -34,3 +34,31 @@ jobs:
         run: |
           make clean
           make ci DISABLE_FUZZ=1 EXTRA_CFLAGS="-m32" EXTRA_LDFLAGS="-m32"
+
+  cross-compile:
+    runs-on: ubuntu-latest
+    env:
+      AVR_CC: avr-gcc
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install AVR and MSP430 toolchains
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            gcc-avr binutils-avr avr-libc \
+            python3-pip
+
+          python3 -m pip install --user platformio
+          "$HOME/.local/bin/pio" pkg install --global --tool toolchain-msp430
+
+          msp430_cc="$HOME/.platformio/packages/toolchain-msp430/bin/msp430-gcc"
+          if [ ! -x "$msp430_cc" ]; then
+            echo "Unable to locate msp430-gcc after PlatformIO installation" >&2
+            exit 1
+          fi
+
+          echo "MSP430_CC=$msp430_cc" >> "$GITHUB_ENV"
+      - name: Build AVR/MSP430 cross-compilation objects
+        run: |
+          make clean
+          make cross DISABLE_FUZZ=1 AVR_CC="$AVR_CC" MSP430_CC="$MSP430_CC"
