@@ -9,7 +9,9 @@
  *
  */
 
+#ifndef ABI_BITS
 #define ABI_BITS(T) ((int)(sizeof(T) * CHAR_BIT))
+#endif
 
 /* General assumptions that should hold on all supported targets. */
 _Static_assert(CHAR_BIT == 8, "heatshrink requires 8-bit bytes");
@@ -94,6 +96,20 @@ _Static_assert(FLT_RADIX == 2, "non-binary floating point not expected");
 #define ABI_EXPECT_UINT_FAST8_BITS   8
 #define ABI_EXPECT_UINT_FAST16_BITS  64
 #define ABI_EXPECT_UINT_FAST32_BITS  64
+#endif
+
+#if !defined(ABI_EXPECT_SHORT_BITS) || \
+    !defined(ABI_EXPECT_INT_BITS) || \
+    !defined(ABI_EXPECT_LONG_BITS) || \
+    !defined(ABI_EXPECT_LLONG_BITS) || \
+    !defined(ABI_EXPECT_PTR_BITS) || \
+    !defined(ABI_EXPECT_SIZE_T_BITS) || \
+    !defined(ABI_EXPECT_UINT_FAST8_BITS) || \
+    !defined(ABI_EXPECT_UINT_FAST16_BITS) || \
+    !defined(ABI_EXPECT_UINT_FAST32_BITS) || \
+    !defined(ABI_EXPECT_FLOAT_BITS) || \
+    !defined(ABI_EXPECT_DOUBLE_BITS)
+#error "unsupported target: ABI expectations not defined for this platform"
 #endif
 
 _Static_assert(ABI_BITS(short) == ABI_EXPECT_SHORT_BITS, "unexpected short width for target profile");
