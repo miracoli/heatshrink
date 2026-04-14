@@ -19,6 +19,20 @@ jobs:
       - name: Build and test
         run: make ci DISABLE_FUZZ=1
 
+  build-embedded-cross:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install AVR and MSP430 toolchains
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            gcc-avr binutils-avr avr-libc msp430-elf-gcc
+      - name: Cross-compile AVR and MSP430 objects
+        run: |
+          make clean
+          make cross
+
   build-32:
     runs-on: ubuntu-latest
     env:
