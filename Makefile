@@ -49,6 +49,7 @@ ci: host-abi test
 cross: cross-avr cross-msp430
 cross-avr: abi_probe_avr.o heatshrink_encoder_avr.o heatshrink_decoder_avr.o
 cross-msp430: abi_probe_msp430.o heatshrink_encoder_msp430.o heatshrink_decoder_msp430.o
+.PHONY: host-abi ci cross cross-avr cross-msp430
 
 clean:
 	rm -f heatshrink test_heatshrink_{dynamic,static} \
