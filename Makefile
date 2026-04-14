@@ -23,6 +23,18 @@ ifeq ($(DISABLE_FUZZ),1)
 CFLAGS += -DHEATSHRINK_DISABLE_FUZZING=1
 endif
 
+# Cross-compile checks for embedded targets.
+#
+# These targets are intentionally compile-only. They are meant to catch
+# target-width / ABI issues early (for example 16-bit int assumptions)
+# without trying to run the full host-oriented test suite on AVR/MSP430.
+AVR_CC ?= avr-gcc
+AVR_MCU ?= attiny85
+MSP430_CC ?= msp430-elf-gcc
+MSP430_MCU ?= msp430g2553
+AVR_CFLAGS = ${WARN} ${OPTIMIZE} -std=c99 -DHEATSHRINK_DYNAMIC_ALLOC=0 -mmcu=${AVR_MCU}
+MSP430_CFLAGS = ${WARN} ${OPTIMIZE} -std=c99 -DHEATSHRINK_DYNAMIC_ALLOC=0 -mmcu=${MSP430_MCU}
+
 all: ${BUILD}/heatshrink test_runners libraries
 
 libraries: libheatshrink_static.a libheatshrink_dynamic.a
@@ -31,7 +43,12 @@ test_runners: test_heatshrink_static test_heatshrink_dynamic
 test: test_runners
 	./test_heatshrink_static
 	./test_heatshrink_dynamic
-ci: test
+host-abi: abi_probe_host.o
+ci: host-abi test
+
+cross: cross-avr cross-msp430
+cross-avr: abi_probe_avr.o heatshrink_encoder_avr.o heatshrink_decoder_avr.o
+cross-msp430: abi_probe_msp430.o heatshrink_encoder_msp430.o heatshrink_decoder_msp430.o
 
 clean:
 	rm -f heatshrink test_heatshrink_{dynamic,static} \
@@ -126,6 +143,22 @@ libheatshrink_dynamic.a: ${DYNAMIC_OBJS}
 %.os: %.c
 	${CC} -c -o $@ $< ${CFLAGS_STATIC}
 
+abi_probe_host.o: abi_probe.c
+	${CC} -c -o $@ $< ${CFLAGS}
+
+abi_probe_avr.o: abi_probe.c
+	${AVR_CC} -c -o $@ $< ${AVR_CFLAGS}
+heatshrink_encoder_avr.o: heatshrink_encoder.c
+	${AVR_CC} -c -o $@ $< ${AVR_CFLAGS}
+heatshrink_decoder_avr.o: heatshrink_decoder.c
+	${AVR_CC} -c -o $@ $< ${AVR_CFLAGS}
+
+abi_probe_msp430.o: abi_probe.c
+	${MSP430_CC} -c -o $@ $< ${MSP430_CFLAGS}
+heatshrink_encoder_msp430.o: heatshrink_encoder.c
+	${MSP430_CC} -c -o $@ $< ${MSP430_CFLAGS}
+heatshrink_decoder_msp430.o: heatshrink_decoder.c
+	${MSP430_CC} -c -o $@ $< ${MSP430_CFLAGS}
+
 *.os: Makefile *.h
 *.od: Makefile *.h
-
