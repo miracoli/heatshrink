@@ -5,6 +5,9 @@ WARN += -Wmissing-prototypes
 WARN += -Wstrict-prototypes
 WARN += -Wmissing-declarations
 
+EXTRA_CFLAGS ?=
+EXTRA_LDFLAGS ?=
+
 # If libtheft is available, build additional property-based tests.
 # Uncomment these to use it in test_heatshrink_dynamic.
 #CFLAGS += -DHEATSHRINK_HAS_THEFT
@@ -13,6 +16,8 @@ WARN += -Wmissing-declarations
 #LDFLAGS += -L${THEFT_PATH}/lib -ltheft
 
 CFLAGS += -std=c99 -g ${WARN} ${THEFT_INC} ${OPTIMIZE}
+CFLAGS += ${EXTRA_CFLAGS}
+LDFLAGS += ${EXTRA_LDFLAGS}
 
 ifeq ($(DISABLE_FUZZ),1)
 CFLAGS += -DHEATSHRINK_DISABLE_FUZZING=1
