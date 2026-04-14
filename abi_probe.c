@@ -47,6 +47,8 @@ _Static_assert(FLT_RADIX == 2, "non-binary floating point not expected");
 #define ABI_EXPECT_LLONG_BITS        64
 #define ABI_EXPECT_PTR_BITS          16
 #define ABI_EXPECT_SIZE_T_BITS       16
+#define ABI_EXPECT_FLOAT_BITS        32
+#define ABI_EXPECT_DOUBLE_BITS       32
 #define ABI_EXPECT_UINT_FAST8_BITS    8
 #define ABI_EXPECT_UINT_FAST16_BITS  16
 #define ABI_EXPECT_UINT_FAST32_BITS  32
@@ -59,6 +61,8 @@ _Static_assert(FLT_RADIX == 2, "non-binary floating point not expected");
 #define ABI_EXPECT_LLONG_BITS        64
 #define ABI_EXPECT_PTR_BITS          16
 #define ABI_EXPECT_SIZE_T_BITS       16
+#define ABI_EXPECT_FLOAT_BITS        32
+#define ABI_EXPECT_DOUBLE_BITS       64
 #define ABI_EXPECT_UINT_FAST8_BITS   16
 #define ABI_EXPECT_UINT_FAST16_BITS  16
 #define ABI_EXPECT_UINT_FAST32_BITS  32
@@ -73,7 +77,7 @@ _Static_assert(FLT_RADIX == 2, "non-binary floating point not expected");
 #define ABI_EXPECT_SIZE_T_BITS       32
 #define ABI_EXPECT_FLOAT_BITS        32
 #define ABI_EXPECT_DOUBLE_BITS       64
-#define ABI_EXPECT_UINT_FAST8_BITS   32
+#define ABI_EXPECT_UINT_FAST8_BITS   8
 #define ABI_EXPECT_UINT_FAST16_BITS  32
 #define ABI_EXPECT_UINT_FAST32_BITS  32
 #endif
@@ -87,7 +91,7 @@ _Static_assert(FLT_RADIX == 2, "non-binary floating point not expected");
 #define ABI_EXPECT_SIZE_T_BITS       64
 #define ABI_EXPECT_FLOAT_BITS        32
 #define ABI_EXPECT_DOUBLE_BITS       64
-#define ABI_EXPECT_UINT_FAST8_BITS   64
+#define ABI_EXPECT_UINT_FAST8_BITS   8
 #define ABI_EXPECT_UINT_FAST16_BITS  64
 #define ABI_EXPECT_UINT_FAST32_BITS  64
 #endif
