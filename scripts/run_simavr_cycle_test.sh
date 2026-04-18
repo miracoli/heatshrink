@@ -115,15 +115,78 @@ extract_phase_timestamps() {
     ' "$vcd"
 }
 
+extract_vcd_timescale_ns() {
+    awk '
+        function unit_scale(unit) {
+            if (unit == "s") return 1000000000;
+            if (unit == "ms") return 1000000;
+            if (unit == "us") return 1000;
+            if (unit == "ns") return 1;
+            return 0;
+        }
+
+        /^\$timescale$/ {
+            mode = 1;
+            next;
+        }
+
+        mode && /^\$end$/ {
+            mode = 0;
+            if (value > 0 && scale > 0) {
+                print value * scale;
+                exit 0;
+            }
+            exit 1;
+        }
+
+        mode && value == 0 {
+            token = $1;
+            if (token ~ /^[0-9]+$/) {
+                value = token + 0;
+                if (NF >= 2) {
+                    scale = unit_scale($2);
+                }
+                next;
+            }
+            if (token ~ /^[0-9]+[a-z]+$/) {
+                unit = token;
+                gsub(/^[0-9]+/, "", unit);
+                value = token + 0;
+                scale = unit_scale(unit);
+                next;
+            }
+        }
+
+        mode && value > 0 && scale == 0 {
+            scale = unit_scale($1);
+        }
+
+        END {
+            if (value > 0 && scale > 0) {
+                print value * scale;
+                exit 0;
+            }
+            exit 1;
+        }
+    ' "$vcd"
+}
+
 timestamps=$(extract_phase_timestamps) || {
     cat "$log" >&2 || true
     fail "did not observe a complete phase_marker trace in '$vcd'"
 }
 
-read -r t1 t2 t3 t4 t5 <<< "$timestamps"
+vcd_tick_ns=$(extract_vcd_timescale_ns) || {
+    fail "could not parse VCD \$timescale from '$vcd'"
+}
 
-compress_ns=$((t2 - t1))
-decompress_ns=$((t4 - t3))
+read -r t1 t2 t3 t4 _ <<< "$timestamps"
+
+compress_ticks=$((t2 - t1))
+decompress_ticks=$((t4 - t3))
+
+compress_ns=$((compress_ticks * vcd_tick_ns))
+decompress_ns=$((decompress_ticks * vcd_tick_ns))
 
 if (( compress_ns <= 0 || decompress_ns <= 0 )); then
     fail "non-positive timing interval in VCD trace"
