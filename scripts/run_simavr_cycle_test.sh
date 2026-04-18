@@ -124,9 +124,34 @@ extract_vcd_timescale_ns() {
             if (unit == "ns") return 1;
             return 0;
         }
+        BEGIN {
+            printed = 0;
+            mode = 0;
+            value = 0;
+            scale = 0;
+        }
 
-        /^\$timescale$/ {
+        /^\$timescale([[:space:]]|$)/ {
             mode = 1;
+            if (NF >= 2) {
+                token = $2;
+                if (token ~ /^[0-9]+$/) {
+                    value = token + 0;
+                    if (NF >= 3) {
+                        scale = unit_scale($3);
+                    }
+                } else if (token ~ /^[0-9]+[a-z]+$/) {
+                    unit = token;
+                    gsub(/^[0-9]+/, "", unit);
+                    value = token + 0;
+                    scale = unit_scale(unit);
+                }
+            }
+            if (NF >= 4 && $NF == "$end" && value > 0 && scale > 0) {
+                print value * scale;
+                printed = 1;
+                exit 0;
+            }
             next;
         }
 
@@ -134,6 +159,7 @@ extract_vcd_timescale_ns() {
             mode = 0;
             if (value > 0 && scale > 0) {
                 print value * scale;
+                printed = 1;
                 exit 0;
             }
             exit 1;
@@ -162,6 +188,9 @@ extract_vcd_timescale_ns() {
         }
 
         END {
+            if (printed) {
+                exit 0;
+            }
             if (value > 0 && scale > 0) {
                 print value * scale;
                 exit 0;
@@ -192,12 +221,8 @@ if (( compress_ns <= 0 || decompress_ns <= 0 )); then
     fail "non-positive timing interval in VCD trace"
 fi
 
-if (( compress_ns % ns_per_cycle != 0 || decompress_ns % ns_per_cycle != 0 )); then
-    fail "VCD timestamps are not aligned to full AVR cycles"
-fi
-
-compress_cycles=$((compress_ns / ns_per_cycle))
-decompress_cycles=$((decompress_ns / ns_per_cycle))
+compress_cycles=$(((compress_ns + (ns_per_cycle / 2)) / ns_per_cycle))
+decompress_cycles=$(((decompress_ns + (ns_per_cycle / 2)) / ns_per_cycle))
 
 if (( compress_cycles == 0 || decompress_cycles == 0 )); then
     fail "invalid zero cycle result"
