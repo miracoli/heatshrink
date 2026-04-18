@@ -216,6 +216,7 @@ int main(void) {
     phase_marker = 1;
     uint8_t res = run_compress_test();
     phase_marker = 2;
+    trace_settle();
     if (res != 0) {
         test_status = res;
         phase_marker = 0xff;
@@ -225,6 +226,7 @@ int main(void) {
     phase_marker = 3;
     res = run_decompress_test();
     phase_marker = 4;
+    trace_settle();
 
     test_status = res;
     phase_marker = (res == 0) ? 5 : 0xff;
