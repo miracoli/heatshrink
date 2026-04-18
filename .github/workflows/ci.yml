@@ -62,3 +62,50 @@ jobs:
         run: |
           make clean
           make cross DISABLE_FUZZ=1 AVR_CC="$AVR_CC" MSP430_CC="$MSP430_CC"
+
+  avr-cycle:
+    runs-on: ubuntu-latest
+    env:
+      AVR_CC: avr-gcc
+      SIMAVR: simavr
+      SIMAVR_INCLUDE: /usr/include/simavr
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install AVR toolchain and simavr
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            gcc-avr binutils-avr avr-libc \
+            simavr libsimavr-dev
+
+      - name: Run AVR cycle test under simavr
+        run: |
+          make clean
+          make avr-cycle AVR_CC="$AVR_CC" SIMAVR="$SIMAVR" SIMAVR_INCLUDE="$SIMAVR_INCLUDE"
+
+      - name: Add AVR cycle metrics to summary
+        if: always()
+        run: |
+          echo "### AVR cycle metrics" >> "$GITHUB_STEP_SUMMARY"
+          echo >> "$GITHUB_STEP_SUMMARY"
+          if [ -f avr_cycle_metrics.txt ]; then
+            {
+              echo "| Metric | Value |"
+              echo "|---|---:|"
+              while IFS='=' read -r key value; do
+                printf '| `%s` | `%s` |\n' "$key" "$value"
+              done < avr_cycle_metrics.txt
+            } >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "No metrics file produced." >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+      - name: Upload AVR cycle metrics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: avr-cycle-metrics
+          path: avr_cycle_metrics.txt
+          if-no-files-found: ignore
+
