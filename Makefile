@@ -34,6 +34,12 @@ MSP430_CC ?= msp430-elf-gcc
 MSP430_MCU ?= msp430g2553
 AVR_CFLAGS = ${WARN} ${OPTIMIZE} -std=c99 -DHEATSHRINK_DYNAMIC_ALLOC=0 -mmcu=${AVR_MCU}
 MSP430_CFLAGS = ${WARN} ${OPTIMIZE} -std=c99 -DHEATSHRINK_DYNAMIC_ALLOC=0 -mmcu=${MSP430_MCU}
+SIMAVR ?= simavr
+SIMAVR_INCLUDE ?= /usr/include/simavr
+AVR_CYCLE_MCU ?= atmega328p
+AVR_CYCLE_HZ ?= 8000000
+AVR_CYCLE_TIMEOUT ?= 10s
+AVR_CYCLE_OPTIMIZE ?= -Os
 
 all: ${BUILD}/heatshrink test_runners libraries
 
@@ -46,15 +52,19 @@ test: test_runners
 host-abi: abi_probe_host.o
 ci: host-abi test
 
+avr-cycle:
+	./scripts/run_simavr_cycle_test.sh
+
 cross: cross-avr cross-msp430
 cross-avr: abi_probe_avr.o heatshrink_encoder_avr.o heatshrink_decoder_avr.o
 cross-msp430: abi_probe_msp430.o heatshrink_encoder_msp430.o heatshrink_decoder_msp430.o
-.PHONY: host-abi ci cross cross-avr cross-msp430
+.PHONY: host-abi ci cross cross-avr cross-msp430 avr-cycle
 
 clean:
 	rm -f heatshrink test_heatshrink_{dynamic,static} \
 		*.o *.os *.od *.core *.a {dec,enc}_sm.png TAGS
 	rm -rf ${BENCHMARK_OUT}
+	rm -rf .simavr-test avr_cycle_metrics.txt
 
 TAGS:
 	etags *.[ch]
