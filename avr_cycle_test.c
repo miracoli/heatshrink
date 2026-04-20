@@ -77,6 +77,26 @@ static uint8_t run_compress_test(void) {
     size_t produced = 0;
     heatshrink_encoder *hse = &hs_state.enc;
 
+    /* Regression check: finishing with no queued input must transition
+     * directly to bit flushing, otherwise 16-bit targets can get stuck
+     * in SEARCH due to unsigned underflow in the end-of-search check. */
+    heatshrink_encoder_reset(hse);
+    if (heatshrink_encoder_finish(hse) != HSER_FINISH_MORE) {
+        return 13;
+    }
+    size_t empty_output_size = 0;
+    HSE_poll_res empty_poll_res =
+        heatshrink_encoder_poll(hse,
+                                output_chunk,
+                                sizeof(output_chunk),
+                                &empty_output_size);
+    if (empty_poll_res != HSER_POLL_EMPTY || empty_output_size != 0) {
+        return 14;
+    }
+    if (heatshrink_encoder_finish(hse) != HSER_FINISH_DONE) {
+        return 15;
+    }
+
     memcpy_P(plaintext, sample_plaintext, INPUT_LEN);
     heatshrink_encoder_reset(hse);
 
