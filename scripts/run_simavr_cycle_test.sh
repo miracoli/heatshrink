@@ -115,6 +115,51 @@ extract_phase_timestamps() {
     ' "$vcd"
 }
 
+extract_final_test_status() {
+    awk '
+        function bin2dec(bits,    i, v) {
+            v = 0;
+            for (i = 1; i <= length(bits); i++) {
+                v = (v * 2) + substr(bits, i, 1);
+            }
+            return v;
+        }
+
+        BEGIN {
+            sym = "";
+            last = "";
+            seen = 0;
+        }
+
+        $1 == "$var" && $(NF-1) == "test_status" {
+            sym = $4;
+            next;
+        }
+
+        sym != "" && $1 ~ /^b[01]+$/ && $2 == sym {
+            last = bin2dec(substr($1, 2));
+            seen = 1;
+            next;
+        }
+
+        sym != "" && $1 ~ /^[01][!-~]+$/ {
+            val = substr($1, 1, 1);
+            code = substr($1, 2);
+            if (code == sym) {
+                last = val + 0;
+                seen = 1;
+            }
+        }
+
+        END {
+            if (!seen) {
+                exit 1;
+            }
+            print last;
+        }
+    ' "$vcd"
+}
+
 extract_vcd_timescale_ns() {
     awk '
         function unit_scale(unit) {
@@ -204,6 +249,16 @@ timestamps=$(extract_phase_timestamps) || {
     cat "$log" >&2 || true
     fail "did not observe a complete phase_marker trace in '$vcd'"
 }
+
+test_status=$(extract_final_test_status) || {
+    cat "$log" >&2 || true
+    fail "did not observe a usable test_status trace in '$vcd'"
+}
+
+if (( test_status != 0 )); then
+    cat "$log" >&2 || true
+    fail "AVR functional test failed (test_status=$test_status)"
+fi
 
 vcd_tick_ns=$(extract_vcd_timescale_ns) || {
     fail "could not parse VCD \$timescale from '$vcd'"
