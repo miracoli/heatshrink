@@ -17,4 +17,6 @@
 #define HEATSHRINK_LITERAL_MARKER 0x01
 #define HEATSHRINK_BACKREF_MARKER 0x00
 
+#define BITS_LITERAL 9 /* One literal: 8 data bits + 1 tag bit = 9 bits. */
+
 #endif
