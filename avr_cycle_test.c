@@ -72,7 +72,7 @@ static void stop_simulation(void) {
 
 static uint8_t run_compress_test(void) {
     uint8_t plaintext[INPUT_LEN];
-    uint8_t compressed[COMPRESSED_CAPACITY];
+    uint8_t output_chunk[16];
     size_t sunk = 0;
     size_t produced = 0;
     heatshrink_encoder *hse = &hs_state.enc;
@@ -93,14 +93,22 @@ static uint8_t run_compress_test(void) {
             size_t output_size = 0;
             HSE_poll_res poll_res =
                 heatshrink_encoder_poll(hse,
-                                        compressed + produced,
-                                        COMPRESSED_CAPACITY - produced,
+                                        output_chunk,
+                                        sizeof(output_chunk),
                                         &output_size);
-            produced += output_size;
+            for (size_t i = 0; i < output_size; i++) {
+                if (produced >= ARRAY_LEN(sample_compressed)) {
+                    return 5;
+                }
+                if (output_chunk[i] != pgm_read_byte(&sample_compressed[produced])) {
+                    return 6;
+                }
+                produced++;
+            }
             if (poll_res == HSER_POLL_EMPTY) {
                 break;
             }
-            if (poll_res != HSER_POLL_MORE || produced >= COMPRESSED_CAPACITY) {
+            if (poll_res != HSER_POLL_MORE) {
                 return 2;
             }
         }
@@ -112,14 +120,22 @@ static uint8_t run_compress_test(void) {
             size_t output_size = 0;
             HSE_poll_res poll_res =
                 heatshrink_encoder_poll(hse,
-                                        compressed + produced,
-                                        COMPRESSED_CAPACITY - produced,
+                                        output_chunk,
+                                        sizeof(output_chunk),
                                         &output_size);
-            produced += output_size;
+            for (size_t i = 0; i < output_size; i++) {
+                if (produced >= ARRAY_LEN(sample_compressed)) {
+                    return 5;
+                }
+                if (output_chunk[i] != pgm_read_byte(&sample_compressed[produced])) {
+                    return 6;
+                }
+                produced++;
+            }
             if (poll_res == HSER_POLL_EMPTY) {
                 break;
             }
-            if (poll_res != HSER_POLL_MORE || produced >= COMPRESSED_CAPACITY) {
+            if (poll_res != HSER_POLL_MORE) {
                 return 3;
             }
         }
@@ -131,12 +147,15 @@ static uint8_t run_compress_test(void) {
         }
     }
 
+    if (produced != ARRAY_LEN(sample_compressed)) {
+        return 5;
+    }
     return 0;
 }
 
 static uint8_t run_decompress_test(void) {
     uint8_t compressed[ARRAY_LEN(sample_compressed)];
-    uint8_t output[INPUT_LEN];
+    uint8_t output_chunk[16];
     size_t sunk = 0;
     size_t produced = 0;
     heatshrink_decoder *hsd = &hs_state.dec;
@@ -160,14 +179,22 @@ static uint8_t run_decompress_test(void) {
             size_t output_size = 0;
             HSD_poll_res poll_res =
                 heatshrink_decoder_poll(hsd,
-                                        output + produced,
-                                        INPUT_LEN - produced,
+                                        output_chunk,
+                                        sizeof(output_chunk),
                                         &output_size);
-            produced += output_size;
+            for (size_t i = 0; i < output_size; i++) {
+                if (produced >= INPUT_LEN) {
+                    return 11;
+                }
+                if (output_chunk[i] != pgm_read_byte(&sample_plaintext[produced])) {
+                    return 12;
+                }
+                produced++;
+            }
             if (poll_res == HSDR_POLL_EMPTY) {
                 break;
             }
-            if (poll_res != HSDR_POLL_MORE || produced >= INPUT_LEN) {
+            if (poll_res != HSDR_POLL_MORE) {
                 return 8;
             }
         }
@@ -179,14 +206,22 @@ static uint8_t run_decompress_test(void) {
             size_t output_size = 0;
             HSD_poll_res poll_res =
                 heatshrink_decoder_poll(hsd,
-                                        output + produced,
-                                        INPUT_LEN - produced,
+                                        output_chunk,
+                                        sizeof(output_chunk),
                                         &output_size);
-            produced += output_size;
+            for (size_t i = 0; i < output_size; i++) {
+                if (produced >= INPUT_LEN) {
+                    return 11;
+                }
+                if (output_chunk[i] != pgm_read_byte(&sample_plaintext[produced])) {
+                    return 12;
+                }
+                produced++;
+            }
             if (poll_res == HSDR_POLL_EMPTY) {
                 break;
             }
-            if (poll_res != HSDR_POLL_MORE || produced >= INPUT_LEN) {
+            if (poll_res != HSDR_POLL_MORE) {
                 return 9;
             }
         }
@@ -201,12 +236,6 @@ static uint8_t run_decompress_test(void) {
     if (produced != INPUT_LEN) {
         return 11;
     }
-    for (size_t i = 0; i < INPUT_LEN; i++) {
-        if (output[i] != pgm_read_byte(&sample_plaintext[i])) {
-            return 12;
-        }
-    }
-
     return 0;
 }
 
