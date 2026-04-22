@@ -117,7 +117,7 @@ jobs:
             -DHEATSHRINK_STATIC_WINDOW_BITS=${{ matrix.w }} \
             -DHEATSHRINK_STATIC_LOOKAHEAD_BITS=${{ matrix.l }} \
             -c heatshrink_decoder.c -o heatshrink_decoder_avr_matrix.o
-          avr-ld -r \
+          avr-gcc -mmcu=atmega1284p -r \
             abi_probe_avr_matrix.o \
             heatshrink_encoder_avr_matrix.o \
             heatshrink_decoder_avr_matrix.o \
