@@ -12,7 +12,6 @@
 #include "heatshrink_encoder.h"
 
 #define ARRAY_LEN(x) (sizeof(x) / sizeof((x)[0]))
-#define COMPRESSED_CAPACITY 128u
 
 /* simavr reads target parameters from the ELF and can automatically
  * generate a VCD trace file from metadata embedded by these macros. */
@@ -72,6 +71,7 @@ static void stop_simulation(void) {
 
 static uint8_t run_compress_test(void) {
     uint8_t plaintext[INPUT_LEN];
+    uint8_t compressed[ARRAY_LEN(sample_compressed)];
     uint8_t output_chunk[16];
     size_t sunk = 0;
     size_t produced = 0;
@@ -97,13 +97,10 @@ static uint8_t run_compress_test(void) {
                                         sizeof(output_chunk),
                                         &output_size);
             for (size_t i = 0; i < output_size; i++) {
-                if (produced >= ARRAY_LEN(sample_compressed)) {
+                if (produced >= ARRAY_LEN(compressed)) {
                     return 5;
                 }
-                if (output_chunk[i] != pgm_read_byte(&sample_compressed[produced])) {
-                    return 6;
-                }
-                produced++;
+                compressed[produced++] = output_chunk[i];
             }
             if (poll_res == HSER_POLL_EMPTY) {
                 break;
@@ -124,13 +121,10 @@ static uint8_t run_compress_test(void) {
                                         sizeof(output_chunk),
                                         &output_size);
             for (size_t i = 0; i < output_size; i++) {
-                if (produced >= ARRAY_LEN(sample_compressed)) {
+                if (produced >= ARRAY_LEN(compressed)) {
                     return 5;
                 }
-                if (output_chunk[i] != pgm_read_byte(&sample_compressed[produced])) {
-                    return 6;
-                }
-                produced++;
+                compressed[produced++] = output_chunk[i];
             }
             if (poll_res == HSER_POLL_EMPTY) {
                 break;
@@ -150,6 +144,13 @@ static uint8_t run_compress_test(void) {
     if (produced != ARRAY_LEN(sample_compressed)) {
         return 5;
     }
+
+    for (size_t i = 0; i < produced; i++) {
+        if (compressed[i] != pgm_read_byte(&sample_compressed[i])) {
+            return 6;
+        }
+    }
+
     return 0;
 }
 

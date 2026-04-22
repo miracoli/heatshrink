@@ -63,6 +63,158 @@ jobs:
           make clean
           make cross DISABLE_FUZZ=1 AVR_CC="$AVR_CC" MSP430_CC="$MSP430_CC"
 
+  avr-static-wl-matrix:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - indexing: 0
+            w: 8
+            l: 4
+          - indexing: 0
+            w: 9
+            l: 5
+          - indexing: 0
+            w: 10
+            l: 6
+          - indexing: 1
+            w: 8
+            l: 4
+          - indexing: 1
+            w: 9
+            l: 5
+          - indexing: 1
+            w: 10
+            l: 6
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install AVR toolchain
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            gcc-avr binutils-avr avr-libc
+      - name: Build static AVR objects (w/l + indexing matrix)
+        run: |
+          avr-gcc -mmcu=atmega1284p -std=c99 -Wall -Wextra -pedantic -Os \
+            -DHEATSHRINK_DYNAMIC_ALLOC=0 \
+            -DHEATSHRINK_USE_INDEX=${{ matrix.indexing }} \
+            -DHEATSHRINK_STATIC_WINDOW_BITS=${{ matrix.w }} \
+            -DHEATSHRINK_STATIC_LOOKAHEAD_BITS=${{ matrix.l }} \
+            -c abi_probe.c -o abi_probe_avr_matrix.o
+          avr-gcc -mmcu=atmega1284p -std=c99 -Wall -Wextra -pedantic -Os \
+            -DHEATSHRINK_DYNAMIC_ALLOC=0 \
+            -DHEATSHRINK_USE_INDEX=${{ matrix.indexing }} \
+            -DHEATSHRINK_STATIC_WINDOW_BITS=${{ matrix.w }} \
+            -DHEATSHRINK_STATIC_LOOKAHEAD_BITS=${{ matrix.l }} \
+            -c heatshrink_encoder.c -o heatshrink_encoder_avr_matrix.o
+          avr-gcc -mmcu=atmega1284p -std=c99 -Wall -Wextra -pedantic -Os \
+            -DHEATSHRINK_DYNAMIC_ALLOC=0 \
+            -DHEATSHRINK_USE_INDEX=${{ matrix.indexing }} \
+            -DHEATSHRINK_STATIC_WINDOW_BITS=${{ matrix.w }} \
+            -DHEATSHRINK_STATIC_LOOKAHEAD_BITS=${{ matrix.l }} \
+            -c heatshrink_decoder.c -o heatshrink_decoder_avr_matrix.o
+      - name: Write static matrix metrics row
+        if: always()
+        run: |
+          printf 'run_type,mode,indexing,w,l,optimize,status,compress_cycles,decompress_cycles\n' > avr_cycle_metrics_static_matrix.csv
+          printf 'matrix,static,%s,%s,%s,n/a,%s,n/a,n/a\n' \
+            "${{ matrix.indexing }}" "${{ matrix.w }}" "${{ matrix.l }}" "${{ job.status }}" \
+            >> avr_cycle_metrics_static_matrix.csv
+      - name: Upload static matrix metrics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: avr-cycle-metrics-static-${{ matrix.indexing }}-${{ matrix.w }}-${{ matrix.l }}
+          path: avr_cycle_metrics_static_matrix.csv
+          if-no-files-found: ignore
+      - name: Add static AVR matrix result to summary
+        if: always()
+        run: |
+          echo "| avr-static | ${{ matrix.indexing }} | ${{ matrix.w }} | ${{ matrix.l }} | ${{ job.status }} |" >> "$GITHUB_STEP_SUMMARY"
+
+  avr-dynamic-wl-matrix:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - indexing: 0
+            w: 8
+            l: 4
+          - indexing: 0
+            w: 9
+            l: 5
+          - indexing: 0
+            w: 10
+            l: 6
+          - indexing: 1
+            w: 8
+            l: 4
+          - indexing: 1
+            w: 9
+            l: 5
+          - indexing: 1
+            w: 10
+            l: 6
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install AVR toolchain
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            gcc-avr binutils-avr avr-libc
+      - name: Build dynamic AVR objects (w/l + indexing matrix)
+        run: |
+          cat > avr_dynamic_matrix_probe.c <<'EOF'
+          #include <stdint.h>
+          #include "heatshrink_encoder.h"
+          #include "heatshrink_decoder.h"
+          int main(void) {
+              heatshrink_encoder *hse = heatshrink_encoder_alloc(__W__, __L__);
+              heatshrink_decoder *hsd = heatshrink_decoder_alloc(256, __W__, __L__);
+              if (hse == 0 || hsd == 0) return 1;
+              heatshrink_encoder_free(hse);
+              heatshrink_decoder_free(hsd);
+              return 0;
+          }
+          EOF
+          sed -i "s/__W__/${{ matrix.w }}/g; s/__L__/${{ matrix.l }}/g" avr_dynamic_matrix_probe.c
+          avr-gcc -mmcu=atmega1284p -std=c99 -Wall -Wextra -pedantic -Os \
+            -DHEATSHRINK_DYNAMIC_ALLOC=1 \
+            -DHEATSHRINK_USE_INDEX=${{ matrix.indexing }} \
+            -c abi_probe.c -o abi_probe_avr_matrix.o
+          avr-gcc -mmcu=atmega1284p -std=c99 -Wall -Wextra -pedantic -Os \
+            -DHEATSHRINK_DYNAMIC_ALLOC=1 \
+            -DHEATSHRINK_USE_INDEX=${{ matrix.indexing }} \
+            -c heatshrink_encoder.c -o heatshrink_encoder_avr_matrix.o
+          avr-gcc -mmcu=atmega1284p -std=c99 -Wall -Wextra -pedantic -Os \
+            -DHEATSHRINK_DYNAMIC_ALLOC=1 \
+            -DHEATSHRINK_USE_INDEX=${{ matrix.indexing }} \
+            -c heatshrink_decoder.c -o heatshrink_decoder_avr_matrix.o
+          avr-gcc -mmcu=atmega1284p -std=c99 -Wall -Wextra -pedantic -Os \
+            -DHEATSHRINK_DYNAMIC_ALLOC=1 \
+            -DHEATSHRINK_USE_INDEX=${{ matrix.indexing }} \
+            avr_dynamic_matrix_probe.c heatshrink_encoder.c heatshrink_decoder.c -o avr_dynamic_matrix_probe.elf
+      - name: Write dynamic matrix metrics row
+        if: always()
+        run: |
+          printf 'run_type,mode,indexing,w,l,optimize,status,compress_cycles,decompress_cycles\n' > avr_cycle_metrics_dynamic_matrix.csv
+          printf 'matrix,dynamic,%s,%s,%s,n/a,%s,n/a,n/a\n' \
+            "${{ matrix.indexing }}" "${{ matrix.w }}" "${{ matrix.l }}" "${{ job.status }}" \
+            >> avr_cycle_metrics_dynamic_matrix.csv
+      - name: Upload dynamic matrix metrics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: avr-cycle-metrics-dynamic-${{ matrix.indexing }}-${{ matrix.w }}-${{ matrix.l }}
+          path: avr_cycle_metrics_dynamic_matrix.csv
+          if-no-files-found: ignore
+      - name: Add dynamic AVR matrix result to summary
+        if: always()
+        run: |
+          echo "| avr-dynamic | ${{ matrix.indexing }} | ${{ matrix.w }} | ${{ matrix.l }} | ${{ job.status }} |" >> "$GITHUB_STEP_SUMMARY"
+
   avr-cycle:
     runs-on: ubuntu-latest
     env:
@@ -79,23 +231,37 @@ jobs:
             gcc-avr binutils-avr avr-libc \
             simavr libsimavr-dev
 
-      - name: Run AVR cycle test under simavr
+      - name: Run AVR cycle tests under simavr for all optimization levels
         run: |
           make clean
-          make avr-cycle AVR_CC="$AVR_CC" SIMAVR="$SIMAVR" SIMAVR_INCLUDE="$SIMAVR_INCLUDE"
+          : > avr_cycle_metrics_all.txt
+          failed=0
+          for opt in -O0 -O1 -Os -O2 -O3; do
+            echo "Running AVR cycle test for $opt"
+            if AVR_CYCLE_OPTIMIZE="$opt" \
+              make avr-cycle AVR_CC="$AVR_CC" SIMAVR="$SIMAVR" SIMAVR_INCLUDE="$SIMAVR_INCLUDE"; then
+              compress="$(awk -F= '/^compress_cycles=/{print $2}' avr_cycle_metrics.txt)"
+              decompress="$(awk -F= '/^decompress_cycles=/{print $2}' avr_cycle_metrics.txt)"
+              printf '%s,%s,%s,%s\n' "$opt" "pass" "$compress" "$decompress" >> avr_cycle_metrics_all.txt
+            else
+              failed=1
+              printf '%s,%s,%s,%s\n' "$opt" "fail" "n/a" "n/a" >> avr_cycle_metrics_all.txt
+            fi
+          done
+          exit "$failed"
 
       - name: Add AVR cycle metrics to summary
         if: always()
         run: |
-          echo "### AVR cycle metrics" >> "$GITHUB_STEP_SUMMARY"
+          echo "### AVR cycle metrics (all optimization levels)" >> "$GITHUB_STEP_SUMMARY"
           echo >> "$GITHUB_STEP_SUMMARY"
-          if [ -f avr_cycle_metrics.txt ]; then
+          if [ -f avr_cycle_metrics_all.txt ]; then
             {
-              echo "| Metric | Value |"
-              echo "|---|---:|"
-              while IFS='=' read -r key value; do
-                printf '| `%s` | `%s` |\n' "$key" "$value"
-              done < avr_cycle_metrics.txt
+              echo "| Optimize | status | compress_cycles | decompress_cycles |"
+              echo "|---|---|---:|---:|"
+              while IFS=',' read -r opt status compress decompress; do
+                printf '| `%s` | `%s` | `%s` | `%s` |\n' "$opt" "$status" "$compress" "$decompress"
+              done < avr_cycle_metrics_all.txt
             } >> "$GITHUB_STEP_SUMMARY"
           else
             echo "No metrics file produced." >> "$GITHUB_STEP_SUMMARY"
@@ -106,6 +272,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: avr-cycle-metrics
-          path: avr_cycle_metrics.txt
+          path: |
+            avr_cycle_metrics.txt
+            avr_cycle_metrics_all.txt
           if-no-files-found: ignore
-
