@@ -98,7 +98,7 @@ static uint8_t run_compress_test(void) {
                                         &output_size);
             for (size_t i = 0; i < output_size; i++) {
                 if (produced >= ARRAY_LEN(compressed)) {
-                    return 5;
+                    return 13;
                 }
                 compressed[produced++] = output_chunk[i];
             }
@@ -122,7 +122,7 @@ static uint8_t run_compress_test(void) {
                                         &output_size);
             for (size_t i = 0; i < output_size; i++) {
                 if (produced >= ARRAY_LEN(compressed)) {
-                    return 5;
+                    return 13;
                 }
                 compressed[produced++] = output_chunk[i];
             }

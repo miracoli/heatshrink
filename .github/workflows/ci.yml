@@ -117,11 +117,16 @@ jobs:
             -DHEATSHRINK_STATIC_WINDOW_BITS=${{ matrix.w }} \
             -DHEATSHRINK_STATIC_LOOKAHEAD_BITS=${{ matrix.l }} \
             -c heatshrink_decoder.c -o heatshrink_decoder_avr_matrix.o
+          avr-ld -r \
+            abi_probe_avr_matrix.o \
+            heatshrink_encoder_avr_matrix.o \
+            heatshrink_decoder_avr_matrix.o \
+            -o heatshrink_static_avr_matrix_linkcheck.o
       - name: Write static matrix metrics row
         if: always()
         run: |
-          printf 'run_type,mode,indexing,w,l,optimize,status,compress_cycles,decompress_cycles\n' > avr_cycle_metrics_static_matrix.csv
-          printf 'matrix,static,%s,%s,%s,n/a,%s,n/a,n/a\n' \
+          printf 'run_type,mode,indexing,w,l,optimize,status\n' > avr_cycle_metrics_static_matrix.csv
+          printf 'matrix,static,%s,%s,%s,n/a,%s\n' \
             "${{ matrix.indexing }}" "${{ matrix.w }}" "${{ matrix.l }}" "${{ job.status }}" \
             >> avr_cycle_metrics_static_matrix.csv
       - name: Upload static matrix metrics
@@ -173,37 +178,33 @@ jobs:
           #include <stdint.h>
           #include "heatshrink_encoder.h"
           #include "heatshrink_decoder.h"
+          #ifndef MATRIX_W
+          #define MATRIX_W 8
+          #endif
+          #ifndef MATRIX_L
+          #define MATRIX_L 4
+          #endif
           int main(void) {
-              heatshrink_encoder *hse = heatshrink_encoder_alloc(__W__, __L__);
-              heatshrink_decoder *hsd = heatshrink_decoder_alloc(256, __W__, __L__);
+              heatshrink_encoder *hse = heatshrink_encoder_alloc(MATRIX_W, MATRIX_L);
+              heatshrink_decoder *hsd = heatshrink_decoder_alloc(256, MATRIX_W, MATRIX_L);
               if (hse == 0 || hsd == 0) return 1;
               heatshrink_encoder_free(hse);
               heatshrink_decoder_free(hsd);
               return 0;
           }
           EOF
-          sed -i "s/__W__/${{ matrix.w }}/g; s/__L__/${{ matrix.l }}/g" avr_dynamic_matrix_probe.c
           avr-gcc -mmcu=atmega1284p -std=c99 -Wall -Wextra -pedantic -Os \
             -DHEATSHRINK_DYNAMIC_ALLOC=1 \
             -DHEATSHRINK_USE_INDEX=${{ matrix.indexing }} \
-            -c abi_probe.c -o abi_probe_avr_matrix.o
-          avr-gcc -mmcu=atmega1284p -std=c99 -Wall -Wextra -pedantic -Os \
-            -DHEATSHRINK_DYNAMIC_ALLOC=1 \
-            -DHEATSHRINK_USE_INDEX=${{ matrix.indexing }} \
-            -c heatshrink_encoder.c -o heatshrink_encoder_avr_matrix.o
-          avr-gcc -mmcu=atmega1284p -std=c99 -Wall -Wextra -pedantic -Os \
-            -DHEATSHRINK_DYNAMIC_ALLOC=1 \
-            -DHEATSHRINK_USE_INDEX=${{ matrix.indexing }} \
-            -c heatshrink_decoder.c -o heatshrink_decoder_avr_matrix.o
-          avr-gcc -mmcu=atmega1284p -std=c99 -Wall -Wextra -pedantic -Os \
-            -DHEATSHRINK_DYNAMIC_ALLOC=1 \
-            -DHEATSHRINK_USE_INDEX=${{ matrix.indexing }} \
-            avr_dynamic_matrix_probe.c heatshrink_encoder.c heatshrink_decoder.c -o avr_dynamic_matrix_probe.elf
+            -DMATRIX_W=${{ matrix.w }} \
+            -DMATRIX_L=${{ matrix.l }} \
+            avr_dynamic_matrix_probe.c heatshrink_encoder.c heatshrink_decoder.c abi_probe.c \
+            -o avr_dynamic_matrix_probe.elf
       - name: Write dynamic matrix metrics row
         if: always()
         run: |
-          printf 'run_type,mode,indexing,w,l,optimize,status,compress_cycles,decompress_cycles\n' > avr_cycle_metrics_dynamic_matrix.csv
-          printf 'matrix,dynamic,%s,%s,%s,n/a,%s,n/a,n/a\n' \
+          printf 'run_type,mode,indexing,w,l,optimize,status\n' > avr_cycle_metrics_dynamic_matrix.csv
+          printf 'matrix,dynamic,%s,%s,%s,n/a,%s\n' \
             "${{ matrix.indexing }}" "${{ matrix.w }}" "${{ matrix.l }}" "${{ job.status }}" \
             >> avr_cycle_metrics_dynamic_matrix.csv
       - name: Upload dynamic matrix metrics
@@ -239,11 +240,15 @@ jobs:
         run: |
           make clean
           : > avr_cycle_metrics_all.txt
+          rm -f avr_cycle_*.log
           failed=0
           for opt in -O0 -O1 -Os -O2 -O3; do
             echo "Running AVR cycle test for $opt"
+            opt_tag="$(printf '%s' "$opt" | tr -d '-')"
+            opt_log="avr_cycle_${opt_tag}.log"
             if AVR_CYCLE_OPTIMIZE="$opt" \
-              make avr-cycle AVR_CC="$AVR_CC" SIMAVR="$SIMAVR" SIMAVR_INCLUDE="$SIMAVR_INCLUDE"; then
+              make avr-cycle AVR_CC="$AVR_CC" SIMAVR="$SIMAVR" SIMAVR_INCLUDE="$SIMAVR_INCLUDE" \
+              >"$opt_log" 2>&1; then
               compress="$(awk -F= '/^compress_cycles=/{print $2}' avr_cycle_metrics.txt)"
               decompress="$(awk -F= '/^decompress_cycles=/{print $2}' avr_cycle_metrics.txt)"
               printf '%s,%s,%s,%s\n' "$opt" "pass" "$compress" "$decompress" >> avr_cycle_metrics_all.txt
@@ -279,4 +284,5 @@ jobs:
           path: |
             avr_cycle_metrics.txt
             avr_cycle_metrics_all.txt
+            avr_cycle_*.log
           if-no-files-found: ignore
