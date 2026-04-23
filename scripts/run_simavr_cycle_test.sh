@@ -8,6 +8,11 @@ set -euo pipefail
 : "${AVR_CYCLE_HZ:=8000000}"
 : "${AVR_CYCLE_TIMEOUT:=10s}"
 : "${AVR_CYCLE_OPTIMIZE:=-Os}"
+: "${AVR_CYCLE_DYNAMIC_ALLOC:=0}"
+: "${AVR_CYCLE_USE_INDEX:=1}"
+: "${AVR_CYCLE_WINDOW_BITS:=8}"
+: "${AVR_CYCLE_LOOKAHEAD_BITS:=4}"
+: "${AVR_CYCLE_DECODER_INPUT_BUFFER_SIZE:=256}"
 
 fail() {
     echo "FAIL: $*" >&2
@@ -42,11 +47,19 @@ log="$build_dir/simavr.log"
 vcd="$build_dir/avr_cycle_trace.vcd"
 
 "$AVR_CC" -mmcu="$AVR_CYCLE_MCU" -DF_CPU="${AVR_CYCLE_HZ}UL" \
-    -std=c99 "$AVR_CYCLE_OPTIMIZE" -g -Wall -Wextra -pedantic \
+    -std=c99 "$AVR_CYCLE_OPTIMIZE" -g -Wall -Wextra -pedantic -include avr_cycle_alloc.h \
     -I"$SIMAVR_INCLUDE" \
-    -DHEATSHRINK_DYNAMIC_ALLOC=0 \
+    -DHEATSHRINK_DYNAMIC_ALLOC="$AVR_CYCLE_DYNAMIC_ALLOC" \
+    -DHEATSHRINK_USE_INDEX="$AVR_CYCLE_USE_INDEX" \
+    -DHEATSHRINK_MALLOC=avr_cycle_malloc \
+    -DHEATSHRINK_FREE=avr_cycle_free \
+    -DHEATSHRINK_STATIC_WINDOW_BITS="$AVR_CYCLE_WINDOW_BITS" \
+    -DHEATSHRINK_STATIC_LOOKAHEAD_BITS="$AVR_CYCLE_LOOKAHEAD_BITS" \
+    -DAVR_CYCLE_WINDOW_BITS="$AVR_CYCLE_WINDOW_BITS" \
+    -DAVR_CYCLE_LOOKAHEAD_BITS="$AVR_CYCLE_LOOKAHEAD_BITS" \
+    -DAVR_CYCLE_DECODER_INPUT_BUFFER_SIZE="$AVR_CYCLE_DECODER_INPUT_BUFFER_SIZE" \
     -o "$elf" \
-    avr_cycle_test.c heatshrink_encoder.c heatshrink_decoder.c
+    avr_cycle_test.c avr_cycle_alloc.c heatshrink_encoder.c heatshrink_decoder.c
 
 rm -f "$log" "$vcd"
 
@@ -289,6 +302,10 @@ decompress_cycles=$decompress_cycles
 avr_cycle_mcu=$AVR_CYCLE_MCU
 avr_cycle_hz=$AVR_CYCLE_HZ
 avr_cycle_optimize=$AVR_CYCLE_OPTIMIZE
+avr_cycle_dynamic_alloc=$AVR_CYCLE_DYNAMIC_ALLOC
+avr_cycle_use_index=$AVR_CYCLE_USE_INDEX
+avr_cycle_window_bits=$AVR_CYCLE_WINDOW_BITS
+avr_cycle_lookahead_bits=$AVR_CYCLE_LOOKAHEAD_BITS
 EOF2
 
 cat "$metrics_file"

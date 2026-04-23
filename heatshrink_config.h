@@ -8,8 +8,12 @@
 
 #if HEATSHRINK_DYNAMIC_ALLOC
     /* Optional replacement of malloc/free */
+    #ifndef HEATSHRINK_MALLOC
     #define HEATSHRINK_MALLOC(SZ) malloc(SZ)
+    #endif
+    #ifndef HEATSHRINK_FREE
     #define HEATSHRINK_FREE(P, SZ) free(P)
+    #endif
 #else
     /* Required parameters for static configuration */
     #ifndef HEATSHRINK_STATIC_INPUT_BUFFER_SIZE
