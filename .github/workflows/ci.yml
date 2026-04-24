@@ -147,7 +147,6 @@ jobs:
         with:
           name: avr-cycle-matrix-metrics
           path: |
-            avr_cycle_metrics.txt
             avr_cycle_metrics_big.csv
             avr_cycle_*.log
           if-no-files-found: ignore
