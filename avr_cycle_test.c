@@ -26,13 +26,17 @@
 #define AVR_CYCLE_DECODER_INPUT_BUFFER_SIZE 256
 #endif
 
+#ifndef AVR_CYCLE_MCU_NAME
+#define AVR_CYCLE_MCU_NAME "atmega328p"
+#endif
+
 #if HEATSHRINK_DYNAMIC_ALLOC
 void avr_cycle_alloc_reset(void);
 #endif
 
 /* simavr reads target parameters from the ELF and can automatically
  * generate a VCD trace file from metadata embedded by these macros. */
-AVR_MCU(F_CPU, "atmega328p");
+AVR_MCU(F_CPU, AVR_CYCLE_MCU_NAME);
 AVR_MCU_VCD_FILE("avr_cycle_trace.vcd", 1000);
 
 /* A small phase marker is enough to delimit the measured regions.

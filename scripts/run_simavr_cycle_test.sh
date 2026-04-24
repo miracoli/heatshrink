@@ -58,6 +58,7 @@ vcd="$build_dir/avr_cycle_trace.vcd"
     -DAVR_CYCLE_WINDOW_BITS="$AVR_CYCLE_WINDOW_BITS" \
     -DAVR_CYCLE_LOOKAHEAD_BITS="$AVR_CYCLE_LOOKAHEAD_BITS" \
     -DAVR_CYCLE_DECODER_INPUT_BUFFER_SIZE="$AVR_CYCLE_DECODER_INPUT_BUFFER_SIZE" \
+    -DAVR_CYCLE_MCU_NAME="\"$AVR_CYCLE_MCU\"" \
     -o "$elf" \
     avr_cycle_test.c avr_cycle_alloc.c heatshrink_encoder.c heatshrink_decoder.c
 

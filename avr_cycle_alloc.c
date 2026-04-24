@@ -4,7 +4,7 @@
 #include "heatshrink_config.h"
 
 #if HEATSHRINK_DYNAMIC_ALLOC
-static uint8_t avr_cycle_heap[4096];
+static uint8_t avr_cycle_heap[12288];
 static size_t avr_cycle_heap_used;
 
 void avr_cycle_alloc_reset(void) {

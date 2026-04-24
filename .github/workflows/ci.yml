@@ -134,7 +134,7 @@ jobs:
               echo "| mode | indexing | w | l | optimize | status | compress_cycles | decompress_cycles |"
               echo "|---|---:|---:|---:|---|---|---:|---:|"
               tail -n +2 avr_cycle_metrics_big.csv | while IFS=',' read -r mode indexing w l opt status compress decompress; do
-                printf '| `%s` | `%s` | `%s` | `%s` | `%s` | `%s` | `%s` | `%s` |\n' "$mode" "$indexing" "$w" "$l" "$opt" "$status" "$compress" "$decompress"
+                printf "| \`%s\` | \`%s\` | \`%s\` | \`%s\` | \`%s\` | \`%s\` | \`%s\` | \`%s\` |\n" "$mode" "$indexing" "$w" "$l" "$opt" "$status" "$compress" "$decompress"
               done
             } >> "$GITHUB_STEP_SUMMARY"
           else
