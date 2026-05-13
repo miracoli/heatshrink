@@ -265,11 +265,10 @@ static HSE_state st_step_search(heatshrink_encoder *hse) {
         msi, hse->input_size + msi, 2*window_length, hse->input_size);
 
     bool fin = is_finishing(hse);
-    if (fin && hse->input_size == 0) {
-        return HSES_FLUSH_BITS;
-    } else if (msi > hse->input_size - (fin ? 1 : lookahead_sz)) {
-        /* Current search buffer is exhausted, copy it into the
-         * backlog and await more input. */
+    uint16_t input_needed = msi + (fin ? 1 : lookahead_sz);
+    if (input_needed > hse->input_size) {
+        /* Current search buffer is exhausted. If finishing, no input remains
+         * to scan; otherwise, copy it into the backlog and await more input. */
         LOG("-- end of search @ %d\n", msi);
         return fin ? HSES_FLUSH_BITS : HSES_SAVE_BACKLOG;
     }
@@ -278,11 +277,9 @@ static HSE_state st_step_search(heatshrink_encoder *hse) {
     uint16_t end = input_offset + msi;
     uint16_t start = end - window_length;
 
-    uint16_t max_possible = lookahead_sz;
-    if (hse->input_size - msi < lookahead_sz) {
-        max_possible = hse->input_size - msi;
-    }
-    
+    uint16_t remaining = hse->input_size - msi;
+    uint16_t max_possible = remaining < lookahead_sz ? remaining : lookahead_sz;
+
     uint16_t match_length = 0;
     uint16_t match_pos = find_longest_match(hse,
         start, end, max_possible, &match_length);
