@@ -24,15 +24,18 @@ jobs:
 
   build-32:
     runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        compiler: [gcc, clang]
     env:
-      CC: gcc
+      CC: ${{ matrix.compiler }}
     steps:
       - uses: actions/checkout@v4
       - name: Install 32-bit build tools
         run: |
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends \
-            gcc-multilib libc6-dev-i386
+            gcc-multilib libc6-dev-i386 clang
       - name: Build and test (32-bit)
         run: |
           make clean
