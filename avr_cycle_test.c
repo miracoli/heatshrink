@@ -12,11 +12,31 @@
 #include "heatshrink_encoder.h"
 
 #define ARRAY_LEN(x) (sizeof(x) / sizeof((x)[0]))
-#define COMPRESSED_CAPACITY 128u
+#define COMPRESSED_CAPACITY 256u
+
+#ifndef AVR_CYCLE_WINDOW_BITS
+#define AVR_CYCLE_WINDOW_BITS 8
+#endif
+
+#ifndef AVR_CYCLE_LOOKAHEAD_BITS
+#define AVR_CYCLE_LOOKAHEAD_BITS 4
+#endif
+
+#ifndef AVR_CYCLE_DECODER_INPUT_BUFFER_SIZE
+#define AVR_CYCLE_DECODER_INPUT_BUFFER_SIZE 256
+#endif
+
+#ifndef AVR_CYCLE_MCU_NAME
+#define AVR_CYCLE_MCU_NAME "atmega328p"
+#endif
+
+#if HEATSHRINK_DYNAMIC_ALLOC
+void avr_cycle_alloc_reset(void);
+#endif
 
 /* simavr reads target parameters from the ELF and can automatically
  * generate a VCD trace file from metadata embedded by these macros. */
-AVR_MCU(F_CPU, "atmega328p");
+AVR_MCU(F_CPU, AVR_CYCLE_MCU_NAME);
 AVR_MCU_VCD_FILE("avr_cycle_trace.vcd", 1000);
 
 /* A small phase marker is enough to delimit the measured regions.
@@ -34,23 +54,42 @@ static const uint8_t sample_plaintext[] PROGMEM =
 
 #define INPUT_LEN ((size_t)(sizeof(sample_plaintext) - 1u))
 
-static const uint8_t sample_compressed[] PROGMEM = {
-    0xaa, 0x5a, 0x2d, 0x37, 0x39, 0x00, 0x08, 0xa8,
-    0x35, 0x6a, 0x94, 0x82, 0xe9, 0x65, 0xb9, 0xdd,
-    0x24, 0x16, 0x4b, 0x0d, 0xd2, 0xc3, 0x2e, 0x90,
-    0x05, 0xbc, 0x2d, 0xe1, 0x6c,
-};
+static uint8_t generated_compressed[COMPRESSED_CAPACITY];
+static size_t generated_compressed_len = 0;
 
-/* Reuse the same SRAM region for encoder and decoder state.
- *
- * With HEATSHRINK_DYNAMIC_ALLOC=0, the encoder can be fairly large on AVR due
- * to its static buffer and optional index. Compression and decompression are
- * run sequentially here, so a union avoids paying for both states at once.
- */
+#if HEATSHRINK_DYNAMIC_ALLOC
+static heatshrink_encoder *hse_ptr;
+static heatshrink_decoder *hsd_ptr;
+#else
 static union {
     heatshrink_encoder enc;
     heatshrink_decoder dec;
 } hs_state;
+#endif
+
+static heatshrink_encoder *get_encoder(void) {
+#if HEATSHRINK_DYNAMIC_ALLOC
+    if (hse_ptr == NULL) {
+        hse_ptr = heatshrink_encoder_alloc(AVR_CYCLE_WINDOW_BITS, AVR_CYCLE_LOOKAHEAD_BITS);
+    }
+    return hse_ptr;
+#else
+    return &hs_state.enc;
+#endif
+}
+
+static heatshrink_decoder *get_decoder(void) {
+#if HEATSHRINK_DYNAMIC_ALLOC
+    if (hsd_ptr == NULL) {
+        hsd_ptr = heatshrink_decoder_alloc(AVR_CYCLE_DECODER_INPUT_BUFFER_SIZE,
+                                           AVR_CYCLE_WINDOW_BITS,
+                                           AVR_CYCLE_LOOKAHEAD_BITS);
+    }
+    return hsd_ptr;
+#else
+    return &hs_state.dec;
+#endif
+}
 
 /* Older simavr examples referenced a helper named trace_settle(), but recent
  * packaged headers don't expose that symbol. Keep a local equivalent that
@@ -75,7 +114,10 @@ static uint8_t run_compress_test(void) {
     uint8_t output_chunk[16];
     size_t sunk = 0;
     size_t produced = 0;
-    heatshrink_encoder *hse = &hs_state.enc;
+    heatshrink_encoder *hse = get_encoder();
+    if (hse == NULL) {
+        return 14;
+    }
 
     memcpy_P(plaintext, sample_plaintext, INPUT_LEN);
     heatshrink_encoder_reset(hse);
@@ -97,13 +139,10 @@ static uint8_t run_compress_test(void) {
                                         sizeof(output_chunk),
                                         &output_size);
             for (size_t i = 0; i < output_size; i++) {
-                if (produced >= ARRAY_LEN(sample_compressed)) {
-                    return 5;
+                if (produced >= ARRAY_LEN(generated_compressed)) {
+                    return 13;
                 }
-                if (output_chunk[i] != pgm_read_byte(&sample_compressed[produced])) {
-                    return 6;
-                }
-                produced++;
+                generated_compressed[produced++] = output_chunk[i];
             }
             if (poll_res == HSER_POLL_EMPTY) {
                 break;
@@ -124,13 +163,10 @@ static uint8_t run_compress_test(void) {
                                         sizeof(output_chunk),
                                         &output_size);
             for (size_t i = 0; i < output_size; i++) {
-                if (produced >= ARRAY_LEN(sample_compressed)) {
-                    return 5;
+                if (produced >= ARRAY_LEN(generated_compressed)) {
+                    return 13;
                 }
-                if (output_chunk[i] != pgm_read_byte(&sample_compressed[produced])) {
-                    return 6;
-                }
-                produced++;
+                generated_compressed[produced++] = output_chunk[i];
             }
             if (poll_res == HSER_POLL_EMPTY) {
                 break;
@@ -147,28 +183,31 @@ static uint8_t run_compress_test(void) {
         }
     }
 
-    if (produced != ARRAY_LEN(sample_compressed)) {
+    if (produced == 0) {
         return 5;
     }
+
+    generated_compressed_len = produced;
     return 0;
 }
 
 static uint8_t run_decompress_test(void) {
-    uint8_t compressed[ARRAY_LEN(sample_compressed)];
     uint8_t output_chunk[16];
     size_t sunk = 0;
     size_t produced = 0;
-    heatshrink_decoder *hsd = &hs_state.dec;
+    heatshrink_decoder *hsd = get_decoder();
+    if (hsd == NULL) {
+        return 15;
+    }
 
-    memcpy_P(compressed, sample_compressed, ARRAY_LEN(sample_compressed));
     heatshrink_decoder_reset(hsd);
 
-    while (sunk < ARRAY_LEN(sample_compressed)) {
+    while (sunk < generated_compressed_len) {
         size_t input_size = 0;
         HSD_sink_res sink_res =
             heatshrink_decoder_sink(hsd,
-                                    compressed + sunk,
-                                    ARRAY_LEN(sample_compressed) - sunk,
+                                    generated_compressed + sunk,
+                                    generated_compressed_len - sunk,
                                     &input_size);
         if ((sink_res != HSDR_SINK_OK && sink_res != HSDR_SINK_FULL) || input_size == 0) {
             return 7;
@@ -240,6 +279,9 @@ static uint8_t run_decompress_test(void) {
 }
 
 int main(void) {
+#if HEATSHRINK_DYNAMIC_ALLOC
+    avr_cycle_alloc_reset();
+#endif
     test_status = 0xff;
     phase_marker = 0;
 
@@ -254,6 +296,10 @@ int main(void) {
     trace_settle();
 
     test_status = (compress_res != 0) ? compress_res : decompress_res;
+#if HEATSHRINK_DYNAMIC_ALLOC
+    if (hse_ptr != NULL) heatshrink_encoder_free(hse_ptr);
+    if (hsd_ptr != NULL) heatshrink_decoder_free(hsd_ptr);
+#endif
     phase_marker = 5;
     trace_settle();
     stop_simulation();

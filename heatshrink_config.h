@@ -8,19 +8,31 @@
 
 #if HEATSHRINK_DYNAMIC_ALLOC
     /* Optional replacement of malloc/free */
+    #ifndef HEATSHRINK_MALLOC
     #define HEATSHRINK_MALLOC(SZ) malloc(SZ)
+    #endif
+    #ifndef HEATSHRINK_FREE
     #define HEATSHRINK_FREE(P, SZ) free(P)
+    #endif
 #else
     /* Required parameters for static configuration */
+    #ifndef HEATSHRINK_STATIC_INPUT_BUFFER_SIZE
     #define HEATSHRINK_STATIC_INPUT_BUFFER_SIZE 32
+    #endif
+    #ifndef HEATSHRINK_STATIC_WINDOW_BITS
     #define HEATSHRINK_STATIC_WINDOW_BITS 8
+    #endif
+    #ifndef HEATSHRINK_STATIC_LOOKAHEAD_BITS
     #define HEATSHRINK_STATIC_LOOKAHEAD_BITS 4
+    #endif
 #endif
 
 /* Turn on logging for debugging. */
 #define HEATSHRINK_DEBUGGING_LOGS 0
 
 /* Use indexing for faster compression. (This requires additional space.) */
+#ifndef HEATSHRINK_USE_INDEX
 #define HEATSHRINK_USE_INDEX 1
+#endif
 
 #endif

@@ -6,6 +6,9 @@ on:
   pull_request:
   workflow_dispatch:
 
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
+
 jobs:
   build-64:
     runs-on: ubuntu-latest
@@ -63,12 +66,13 @@ jobs:
           make clean
           make cross DISABLE_FUZZ=1 AVR_CC="$AVR_CC" MSP430_CC="$MSP430_CC"
 
-  avr-cycle:
+  avr-cycle-matrix:
     runs-on: ubuntu-latest
     env:
       AVR_CC: avr-gcc
       SIMAVR: simavr
       SIMAVR_INCLUDE: /usr/include/simavr
+      AVR_CYCLE_MCU: atmega1284p
     steps:
       - uses: actions/checkout@v4
 
@@ -79,33 +83,70 @@ jobs:
             gcc-avr binutils-avr avr-libc \
             simavr libsimavr-dev
 
-      - name: Run AVR cycle test under simavr
+      - name: Run AVR cycle matrix (mode/index/w/l/opt)
         run: |
           make clean
-          make avr-cycle AVR_CC="$AVR_CC" SIMAVR="$SIMAVR" SIMAVR_INCLUDE="$SIMAVR_INCLUDE"
+          : > avr_cycle_metrics_big.csv
+          rm -f avr_cycle_*.log
+          failed=0
+          echo "mode,indexing,w,l,optimize,status,compress_cycles,decompress_cycles" > avr_cycle_metrics_big.csv
+          for mode in static dynamic; do
+            for indexing in 0 1; do
+              for wl in 8:4 9:5 10:6; do
+                w="${wl%:*}"
+                l="${wl#*:}"
+                for opt in -O0 -O1 -Os -O2 -O3; do
+                  opt_tag="$(printf '%s' "$opt" | tr -d '-')"
+                  opt_log="avr_cycle_${mode}_idx${indexing}_w${w}_l${l}_${opt_tag}.log"
+                  rm -f avr_cycle_metrics.txt
+                  if AVR_CYCLE_DYNAMIC_ALLOC="$([ "$mode" = "dynamic" ] && echo 1 || echo 0)" \
+                    AVR_CYCLE_USE_INDEX="$indexing" \
+                    AVR_CYCLE_WINDOW_BITS="$w" \
+                    AVR_CYCLE_LOOKAHEAD_BITS="$l" \
+                    AVR_CYCLE_OPTIMIZE="$opt" \
+                    make avr-cycle AVR_CC="$AVR_CC" SIMAVR="$SIMAVR" SIMAVR_INCLUDE="$SIMAVR_INCLUDE" \
+                    >"$opt_log" 2>&1; then
+                    compress="$(awk -F= '/^compress_cycles=/{print $2}' avr_cycle_metrics.txt)"
+                    decompress="$(awk -F= '/^decompress_cycles=/{print $2}' avr_cycle_metrics.txt)"
+                    printf '%s,%s,%s,%s,%s,%s,%s,%s\n' \
+                      "$mode" "$indexing" "$w" "$l" "$opt" "pass" "$compress" "$decompress" \
+                      >> avr_cycle_metrics_big.csv
+                  else
+                    failed=1
+                    printf '%s,%s,%s,%s,%s,%s,%s,%s\n' \
+                      "$mode" "$indexing" "$w" "$l" "$opt" "fail" "n/a" "n/a" \
+                      >> avr_cycle_metrics_big.csv
+                    rm -f avr_cycle_metrics.txt
+                  fi
+                done
+              done
+            done
+          done
+          exit "$failed"
 
-      - name: Add AVR cycle metrics to summary
+      - name: Add AVR cycle matrix metrics to summary
         if: always()
         run: |
-          echo "### AVR cycle metrics" >> "$GITHUB_STEP_SUMMARY"
+          echo "### AVR cycle matrix metrics" >> "$GITHUB_STEP_SUMMARY"
           echo >> "$GITHUB_STEP_SUMMARY"
-          if [ -f avr_cycle_metrics.txt ]; then
+          if [ -f avr_cycle_metrics_big.csv ]; then
             {
-              echo "| Metric | Value |"
-              echo "|---|---:|"
-              while IFS='=' read -r key value; do
-                printf '| `%s` | `%s` |\n' "$key" "$value"
-              done < avr_cycle_metrics.txt
+              echo "| mode | indexing | w | l | optimize | status | compress_cycles | decompress_cycles |"
+              echo "|---|---:|---:|---:|---|---|---:|---:|"
+              tail -n +2 avr_cycle_metrics_big.csv | while IFS=',' read -r mode indexing w l opt status compress decompress; do
+                printf "| \`%s\` | \`%s\` | \`%s\` | \`%s\` | \`%s\` | \`%s\` | \`%s\` | \`%s\` |\n" "$mode" "$indexing" "$w" "$l" "$opt" "$status" "$compress" "$decompress"
+              done
             } >> "$GITHUB_STEP_SUMMARY"
           else
             echo "No metrics file produced." >> "$GITHUB_STEP_SUMMARY"
           fi
 
-      - name: Upload AVR cycle metrics
+      - name: Upload AVR cycle matrix metrics
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: avr-cycle-metrics
-          path: avr_cycle_metrics.txt
+          name: avr-cycle-matrix-metrics
+          path: |
+            avr_cycle_metrics_big.csv
+            avr_cycle_*.log
           if-no-files-found: ignore
-
