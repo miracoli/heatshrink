@@ -135,4 +135,4 @@ documentation.
 
 ## Build Status
 
-  [![Build Status](https://travis-ci.org/atomicobject/heatshrink.png)](http://travis-ci.org/atomicobject/heatshrink)
+  [![CI](https://github.com/miracoli/heatshrink/actions/workflows/ci.yml/badge.svg)](https://github.com/miracoli/heatshrink/actions/workflows/ci.yml)
