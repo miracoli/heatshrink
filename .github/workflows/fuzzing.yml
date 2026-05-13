@@ -1,0 +1,25 @@
+name: Fuzzing
+
+on:
+  workflow_dispatch:
+  schedule:
+    # GitHub Actions cron uses UTC; this runs nightly in US time zones.
+    - cron: "17 09 * * *"
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
+
+jobs:
+  fuzzing:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        compiler: [gcc, clang]
+    env:
+      CC: ${{ matrix.compiler }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build and test with fuzzing enabled
+        run: |
+          make clean
+          make ci
