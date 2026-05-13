@@ -937,6 +937,35 @@ TEST regression_index_fail(void) {
     return compress_and_expand_and_check(input, size, &cfg);
 }
 
+TEST regression_finish_with_partial_flush_byte_should_report_poll_more(void) {
+    heatshrink_encoder *hse = heatshrink_encoder_alloc(8, 7);
+    uint8_t input[] = { 'x' };
+    uint8_t output[1];
+    size_t count = 0;
+
+    ASSERT(hse);
+    ASSERT_EQ(HSER_SINK_OK, heatshrink_encoder_sink(hse, input, sizeof(input), &count));
+    ASSERT_EQ(sizeof(input), count);
+
+    ASSERT_EQ(HSER_FINISH_MORE, heatshrink_encoder_finish(hse));
+
+    /* Regression for the separate finish/poll bug where a full output buffer
+     * during the final partial literal flush can incorrectly yield EMPTY
+     * instead of MORE, causing drivers to drop the last byte. */
+    count = 0;
+    ASSERT_EQ(HSER_POLL_MORE, heatshrink_encoder_poll(hse, output, sizeof(output), &count));
+    ASSERT_EQ(1, count);
+
+    count = 0;
+    ASSERT_EQ(HSER_POLL_EMPTY, heatshrink_encoder_poll(hse, output, sizeof(output), &count));
+    ASSERT_EQ(1, count);
+
+    ASSERT_EQ(HSER_FINISH_DONE, heatshrink_encoder_finish(hse));
+
+    heatshrink_encoder_free(hse);
+    PASS();
+}
+
 TEST sixty_four_k(void) {
     /* Regression: An input buffer of 64k should not cause an
      * overflow that leads to an infinite loop. */
@@ -957,6 +986,7 @@ SUITE(regression) {
     RUN_TEST(small_input_buffer_should_not_impact_decoder_correctness);
     RUN_TEST(regression_backreference_counters_should_not_roll_over);
     RUN_TEST(regression_index_fail);
+    RUN_TEST(regression_finish_with_partial_flush_byte_should_report_poll_more);
     RUN_TEST(sixty_four_k);
 }
 
