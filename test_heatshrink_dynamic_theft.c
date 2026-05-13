@@ -36,13 +36,14 @@ typedef struct {
     uint8_t buf[];
 } rbuf;
 
-static void *rbuf_alloc_cb(struct theft *t, theft_hash seed, void *env) {
+static enum theft_alloc_res rbuf_alloc_cb(struct theft *t, void *env, void **output) {
     test_env *te = (test_env *)env;
+    theft_seed seed = theft_random(t);
     //printf("seed is 0x%016llx\n", seed);
 
     size_t sz = (size_t)(seed % te->limit) + 1;
     rbuf *r = malloc(sizeof(rbuf) + sz);
-    if (r == NULL) { return THEFT_ERROR; }
+    if (r == NULL) { return THEFT_ALLOC_ERROR; }
     r->size = sz;
 
     for (size_t i = 0; i < sz; i += sizeof(theft_hash)) {
@@ -53,7 +54,8 @@ static void *rbuf_alloc_cb(struct theft *t, theft_hash seed, void *env) {
         }
     }
 
-    return r;
+    *output = r;
+    return THEFT_ALLOC_OK;
 }
 
 static void rbuf_free_cb(void *instance, void *env) {
@@ -61,73 +63,78 @@ static void rbuf_free_cb(void *instance, void *env) {
     (void)env;
 }
 
-static uint64_t rbuf_hash_cb(void *instance, void *env) {
-    rbuf *r = (rbuf *)instance;
+static theft_hash rbuf_hash_cb(const void *instance, void *env) {
+    const rbuf *r = (const rbuf *)instance;
     (void)env;
     return theft_hash_onepass(r->buf, r->size);
 }
 
 /* Make a copy of a buffer, keeping NEW_SZ bytes starting at OFFSET. */
-static void *copy_rbuf_subset(rbuf *cur, size_t new_sz, size_t byte_offset) {
-    if (new_sz == 0) { return THEFT_DEAD_END; }
+static enum theft_shrink_res copy_rbuf_subset(const rbuf *cur,
+        size_t new_sz, size_t byte_offset, void **output) {
+    if (new_sz == 0) { return THEFT_SHRINK_DEAD_END; }
     rbuf *nr = malloc(sizeof(rbuf) + new_sz);
-    if (nr == NULL) { return THEFT_ERROR; }
+    if (nr == NULL) { return THEFT_SHRINK_ERROR; }
     nr->size = new_sz;
     memcpy(nr->buf, &cur->buf[byte_offset], new_sz);
     /* printf("%zu -> %zu\n", cur->size, new_sz); */
-    return nr;
+    *output = nr;
+    return THEFT_SHRINK_OK;
 }
 
 /* Make a copy of a buffer, but only PORTION, starting OFFSET in
  * (e.g. the third quarter is (0.25 at +0.75). Rounds to ints. */
-static void *copy_rbuf_percent(rbuf *cur, float portion, float offset) {
+static enum theft_shrink_res copy_rbuf_percent(const rbuf *cur,
+        float portion, float offset, void **output) {
     size_t new_sz = cur->size * portion;
     size_t byte_offset = (size_t)(cur->size * offset);
-    return copy_rbuf_subset(cur, new_sz, byte_offset);
+    return copy_rbuf_subset(cur, new_sz, byte_offset, output);
 }
 
 /* How to shrink a random buffer to a simpler one. */
-static void *rbuf_shrink_cb(void *instance, uint32_t tactic, void *env) {
-    rbuf *cur = (rbuf *)instance;
+static enum theft_shrink_res rbuf_shrink_cb(struct theft *t,
+        const void *instance, uint32_t tactic, void *env, void **output) {
+    const rbuf *cur = (const rbuf *)instance;
+    (void)t;
+    (void)env;
 
     if (tactic == 0) {          /* first half */
-        return copy_rbuf_percent(cur, 0.5, 0);
+        return copy_rbuf_percent(cur, 0.5, 0, output);
     } else if (tactic == 1) {   /* second half */
-        return copy_rbuf_percent(cur, 0.5, 0.5);
+        return copy_rbuf_percent(cur, 0.5, 0.5, output);
     } else if (tactic <= 18) {  /* drop 1-16 bytes at start */
         const int last_tactic = 1;
         const size_t drop = tactic - last_tactic;
-        if (cur->size < drop) { return THEFT_DEAD_END; }
-        return copy_rbuf_subset(cur, cur->size - drop, drop);
+        if (cur->size < drop) { return THEFT_SHRINK_DEAD_END; }
+        return copy_rbuf_subset(cur, cur->size - drop, drop, output);
     } else if (tactic <= 34) {  /* drop 1-16 bytes at end */
         const int last_tactic = 18;
         const size_t drop = tactic - last_tactic;
-        if (cur->size < drop) { return THEFT_DEAD_END; }
-        return copy_rbuf_subset(cur, cur->size - drop, 0);
-    } else if (tactic == 35) {
-        /* Divide every byte by 2, saturating at 0 */
-        rbuf *cp = copy_rbuf_percent(cur, 1, 0);
-        if (cp == NULL) { return THEFT_ERROR; }
-        for (size_t i = 0; i < cp->size; i++) { cp->buf[i] /= 2; }
-        return cp;
-    } else if (tactic == 36) {
-        /* subtract 1 from every byte, saturating at 0 */
-        rbuf *cp = copy_rbuf_percent(cur, 1, 0);
-        if (cp == NULL) { return THEFT_ERROR; }
-        for (size_t i = 0; i < cp->size; i++) {
-            if (cp->buf[i] > 0) { cp->buf[i]--; }
-        }
-        return cp;
-    } else {
-        (void)env;
-        return THEFT_NO_MORE_TACTICS;
-    }
+        if (cur->size < drop) { return THEFT_SHRINK_DEAD_END; }
+        return copy_rbuf_subset(cur, cur->size - drop, 0, output);
+    } else if (tactic == 35 || tactic == 36) {
+        /* Divide every byte by 2, or subtract 1, saturating at 0. */
+        void *copy = NULL;
+        enum theft_shrink_res res = copy_rbuf_percent(cur, 1, 0, &copy);
+        if (res != THEFT_SHRINK_OK) { return res; }
+        rbuf *cp = (rbuf *)copy;
 
-    return THEFT_NO_MORE_TACTICS;
+        if (tactic == 35) {
+            for (size_t i = 0; i < cp->size; i++) { cp->buf[i] /= 2; }
+        } else {
+            for (size_t i = 0; i < cp->size; i++) {
+                if (cp->buf[i] > 0) { cp->buf[i]--; }
+            }
+        }
+        *output = cp;
+        return THEFT_SHRINK_OK;
+    } else {
+        return THEFT_SHRINK_NO_MORE_TACTICS;
+    }
 }
 
-static void rbuf_print_cb(FILE *f, void *instance, void *env) {
-    rbuf *r = (rbuf *)instance;
+static void rbuf_print_cb(FILE *f, const void *instance, void *env) {
+    const rbuf *r = (const rbuf *)instance;
     (void)env;
     fprintf(f, "buf[%zd]:\n    ", r->size);
     uint8_t bytes = 0;
@@ -150,14 +157,16 @@ static struct theft_type_info rbuf_info = {
     .print = rbuf_print_cb,
 };
 
-static void *window_alloc_cb(struct theft *t, theft_seed seed, void *env) {
+static enum theft_alloc_res window_alloc_cb(struct theft *t,
+        void *env, void **output) {
     uint8_t *window = malloc(sizeof(uint8_t));
-    if (window == NULL) { return THEFT_ERROR; }
+    if (window == NULL) { return THEFT_ALLOC_ERROR; }
+    theft_seed seed = theft_random(t);
     *window = (seed % (HEATSHRINK_MAX_WINDOW_BITS - HEATSHRINK_MIN_WINDOW_BITS))
       + HEATSHRINK_MIN_WINDOW_BITS;
-    (void)t;
     (void)env;
-    return window;
+    *output = window;
+    return THEFT_ALLOC_OK;
 }
 
 static void window_free_cb(void *instance, void *env) {
@@ -165,13 +174,13 @@ static void window_free_cb(void *instance, void *env) {
     (void)env;
 }
 
-static theft_hash window_hash_cb(void *instance, void *env) {
+static theft_hash window_hash_cb(const void *instance, void *env) {
     (void)env;
-    return *(uint8_t *)instance;
+    return *(const uint8_t *)instance;
 }
 
-static void window_print_cb(FILE *f, void *instance, void *env) {
-    fprintf(f, "%u", (*(uint8_t *)instance));
+static void window_print_cb(FILE *f, const void *instance, void *env) {
+    fprintf(f, "%u", (*(const uint8_t *)instance));
     (void)env;
 }
 
@@ -182,14 +191,16 @@ static struct theft_type_info window_info = {
     .print = window_print_cb,
 };
 
-static void *lookahead_alloc_cb(struct theft *t, theft_seed seed, void *env) {
-    uint8_t *window = malloc(sizeof(uint8_t));
-    if (window == NULL) { return THEFT_ERROR; }
-    *window = (seed % (HEATSHRINK_MAX_WINDOW_BITS - HEATSHRINK_MIN_LOOKAHEAD_BITS))
+static enum theft_alloc_res lookahead_alloc_cb(struct theft *t,
+        void *env, void **output) {
+    uint8_t *lookahead = malloc(sizeof(uint8_t));
+    if (lookahead == NULL) { return THEFT_ALLOC_ERROR; }
+    theft_seed seed = theft_random(t);
+    *lookahead = (seed % (HEATSHRINK_MAX_WINDOW_BITS - HEATSHRINK_MIN_LOOKAHEAD_BITS))
       + HEATSHRINK_MIN_LOOKAHEAD_BITS;
-    (void)t;
     (void)env;
-    return window;
+    *output = lookahead;
+    return THEFT_ALLOC_OK;
 }
 
 static void lookahead_free_cb(void *instance, void *env) {
@@ -197,13 +208,13 @@ static void lookahead_free_cb(void *instance, void *env) {
     (void)env;
 }
 
-static theft_hash lookahead_hash_cb(void *instance, void *env) {
+static theft_hash lookahead_hash_cb(const void *instance, void *env) {
     (void)env;
-    return *(uint8_t *)instance;
+    return *(const uint8_t *)instance;
 }
 
-static void lookahead_print_cb(FILE *f, void *instance, void *env) {
-    fprintf(f, "%u", (*(uint8_t *)instance));
+static void lookahead_print_cb(FILE *f, const void *instance, void *env) {
+    fprintf(f, "%u", (*(const uint8_t *)instance));
     (void)env;
 }
 
@@ -215,9 +226,11 @@ static struct theft_type_info lookahead_info = {
 };
 
 
-static void *decoder_buf_alloc_cb(struct theft *t, theft_seed seed, void *env) {
+static enum theft_alloc_res decoder_buf_alloc_cb(struct theft *t,
+        void *env, void **output) {
     uint16_t *size = malloc(sizeof(uint16_t));
-    if (size == NULL) { return THEFT_ERROR; }
+    if (size == NULL) { return THEFT_ALLOC_ERROR; }
+    theft_seed seed = theft_random(t);
 
     /* Get a random uint16_t, and only keep bottom 0-15 bits at random,
      * to bias towards smaller buffers. */
@@ -225,9 +238,9 @@ static void *decoder_buf_alloc_cb(struct theft *t, theft_seed seed, void *env) {
     *size &= (1 << (theft_random(t) & 0xF)) - 1;
 
     if (*size == 0) { *size = 1; }   // round up to 1
-    (void)t;
     (void)env;
-    return size;
+    *output = size;
+    return THEFT_ALLOC_OK;
 }
 
 static void decoder_buf_free_cb(void *instance, void *env) {
@@ -235,13 +248,13 @@ static void decoder_buf_free_cb(void *instance, void *env) {
     (void)env;
 }
 
-static theft_hash decoder_buf_hash_cb(void *instance, void *env) {
+static theft_hash decoder_buf_hash_cb(const void *instance, void *env) {
     (void)env;
-    return *(uint16_t *)instance;
+    return *(const uint16_t *)instance;
 }
 
-static void decoder_buf_print_cb(FILE *f, void *instance, void *env) {
-    fprintf(f, "%u", (*(uint16_t *)instance));
+static void decoder_buf_print_cb(FILE *f, const void *instance, void *env) {
+    fprintf(f, "%u", (*(const uint16_t *)instance));
     (void)env;
 }
 
