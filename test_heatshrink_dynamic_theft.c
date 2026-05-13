@@ -307,6 +307,7 @@ prop_should_not_get_stuck(struct theft *t, void *input, void *window, void *look
     uint8_t lookahead_sz2 = *(uint8_t *)lookahead;
     if (lookahead_sz2 >= window_sz2) { return THEFT_TRIAL_SKIP; }
 
+    enum theft_trial_res res = THEFT_TRIAL_ERROR;
     heatshrink_decoder *hsd = heatshrink_decoder_alloc((64 * 1024L) - 1,
         window_sz2, lookahead_sz2);
     if (hsd == NULL) { return THEFT_TRIAL_ERROR; }
@@ -315,17 +316,21 @@ prop_should_not_get_stuck(struct theft *t, void *input, void *window, void *look
 
     size_t count = 0;
     HSD_sink_res sres = heatshrink_decoder_sink(hsd, r->buf, r->size, &count);
-    if (sres != HSDR_SINK_OK) { return THEFT_TRIAL_ERROR; }
+    if (sres != HSDR_SINK_OK) { goto cleanup; }
     
     size_t out_sz = 0;
     HSD_poll_res pres = heatshrink_decoder_poll(hsd, output, BUF_SIZE, &out_sz);
-    if (pres != HSDR_POLL_EMPTY) { return THEFT_TRIAL_FAIL; }
+    if (pres != HSDR_POLL_EMPTY) {
+        res = THEFT_TRIAL_FAIL;
+        goto cleanup;
+    }
     
     HSD_finish_res fres = heatshrink_decoder_finish(hsd);
-    heatshrink_decoder_free(hsd);
-    if (fres != HSDR_FINISH_DONE) { return THEFT_TRIAL_FAIL; }
+    res = (fres == HSDR_FINISH_DONE) ? THEFT_TRIAL_PASS : THEFT_TRIAL_FAIL;
 
-    return THEFT_TRIAL_PASS;
+cleanup:
+    heatshrink_decoder_free(hsd);
+    return res;
 }
 
 static bool get_time_seed(theft_seed *seed)
@@ -453,39 +458,46 @@ prop_encoded_and_decoded_data_should_match(struct theft *t, void *input,
     uint8_t lookahead_sz2 = *(uint8_t *)lookahead;
     if (lookahead_sz2 >= window_sz2) { return THEFT_TRIAL_SKIP; }
 
+    enum theft_trial_res res = THEFT_TRIAL_ERROR;
     heatshrink_encoder *hse = heatshrink_encoder_alloc(window_sz2, lookahead_sz2);
     if (hse == NULL) { return THEFT_TRIAL_ERROR; }
 
     assert(decoder_buffer_size);
     uint16_t buf_size = *(uint16_t *)decoder_buffer_size;
     heatshrink_decoder *hsd = heatshrink_decoder_alloc(buf_size, window_sz2, lookahead_sz2);
-    if (hsd == NULL) { return THEFT_TRIAL_ERROR; }
+    if (hsd == NULL) { goto cleanup_encoder; }
     
     rbuf *r = (rbuf *)input;
 
     size_t compressed_size = 0;
     if (!do_compress(hse, r->buf, r->size, output,
             BUF_SIZE, &compressed_size)) {
-        return THEFT_TRIAL_ERROR;
+        goto cleanup;
     }
 
     size_t decompressed_size = 0;
     if (!do_decompress(hsd, output, compressed_size, output2,
             BUF_SIZE, &decompressed_size)) {
-        return THEFT_TRIAL_ERROR;
+        goto cleanup;
     }
 
     // verify decompressed output matches original input
     if (r->size != decompressed_size) {
-        return THEFT_TRIAL_FAIL;
+        res = THEFT_TRIAL_FAIL;
+        goto cleanup;
     }
     if (0 != memcmp(output2, r->buf, decompressed_size)) {
-        return THEFT_TRIAL_FAIL;
+        res = THEFT_TRIAL_FAIL;
+        goto cleanup;
     }
     
-    heatshrink_encoder_free(hse);
+    res = THEFT_TRIAL_PASS;
+
+cleanup:
     heatshrink_decoder_free(hsd);
-    return THEFT_TRIAL_PASS;
+cleanup_encoder:
+    heatshrink_encoder_free(hse);
+    return res;
 }
 
 TEST encoded_and_decoded_data_should_match(void) {
@@ -528,6 +540,7 @@ prop_encoding_data_should_never_increase_it_by_more_than_an_eighth_at_worst(stru
     uint8_t lookahead_sz2 = *(uint8_t *)lookahead;
     if (lookahead_sz2 >= window_sz2) { return THEFT_TRIAL_SKIP; }
 
+    enum theft_trial_res res = THEFT_TRIAL_ERROR;
     heatshrink_encoder *hse = heatshrink_encoder_alloc(window_sz2, lookahead_sz2);
     if (hse == NULL) { return THEFT_TRIAL_ERROR; }
     
@@ -536,16 +549,15 @@ prop_encoding_data_should_never_increase_it_by_more_than_an_eighth_at_worst(stru
     size_t compressed_size = 0;
     if (!do_compress(hse, r->buf, r->size, output,
             BUF_SIZE, &compressed_size)) {
-        return THEFT_TRIAL_ERROR;
+        goto cleanup;
     }
 
     size_t ceil_9_8s = ceil_nine_eighths(r->size);
-    if (compressed_size > ceil_9_8s) {
-        return THEFT_TRIAL_FAIL;
-    }
+    res = (compressed_size > ceil_9_8s) ? THEFT_TRIAL_FAIL : THEFT_TRIAL_PASS;
 
+cleanup:
     heatshrink_encoder_free(hse);
-    return THEFT_TRIAL_PASS;
+    return res;
 }
 
 TEST encoding_data_should_never_increase_it_by_more_than_an_eighth_at_worst(void) {
@@ -583,6 +595,7 @@ prop_encoder_should_always_make_progress(struct theft *t, void *instance, void *
     uint8_t lookahead_sz2 = *(uint8_t *)lookahead;
     if (lookahead_sz2 >= window_sz2) { return THEFT_TRIAL_SKIP; }
 
+    enum theft_trial_res res = THEFT_TRIAL_ERROR;
     heatshrink_encoder *hse = heatshrink_encoder_alloc(window_sz2, lookahead_sz2);
     if (hse == NULL) { return THEFT_TRIAL_ERROR; }
     
@@ -596,34 +609,38 @@ prop_encoder_should_always_make_progress(struct theft *t, void *instance, void *
             size_t input_size = 0;
             HSE_sink_res esres = heatshrink_encoder_sink(hse,
                 &r->buf[sunk], r->size - sunk, &input_size);
-            if (esres != HSER_SINK_OK) { return THEFT_TRIAL_ERROR; }
+            if (esres != HSER_SINK_OK) { goto cleanup; }
             sunk += input_size;
         } else {
             HSE_finish_res efres = heatshrink_encoder_finish(hse);
             if (efres == HSER_FINISH_DONE) {
+                res = THEFT_TRIAL_PASS;
                 break;
             } else if (efres != HSER_FINISH_MORE) {
                 printf("FAIL %d\n", __LINE__);
-                return THEFT_TRIAL_FAIL;
+                res = THEFT_TRIAL_FAIL;
+                goto cleanup;
             }
         }
 
         size_t output_size = 0;
         HSE_poll_res epres = heatshrink_encoder_poll(hse,
             output, BUF_SIZE, &output_size);
-        if (epres < 0) { return THEFT_TRIAL_ERROR; }
+        if (epres < 0) { goto cleanup; }
         if (output_size == 0 && sunk == r->size) {
             no_progress++;
             if (no_progress > 2) {
-                return THEFT_TRIAL_FAIL;
+                res = THEFT_TRIAL_FAIL;
+                goto cleanup;
             }
         } else {
             no_progress = 0;
         }
     }
 
+cleanup:
     heatshrink_encoder_free(hse);
-    return THEFT_TRIAL_PASS;
+    return res;
 }
 
 TEST encoder_should_always_make_progress(void) {
@@ -661,6 +678,7 @@ prop_decoder_should_always_make_progress(struct theft *t, void *instance, void *
     uint8_t lookahead_sz2 = *(uint8_t *)lookahead;
     if (lookahead_sz2 >= window_sz2) { return THEFT_TRIAL_SKIP; }
 
+    enum theft_trial_res res = THEFT_TRIAL_ERROR;
     heatshrink_decoder *hsd = heatshrink_decoder_alloc(512, window_sz2, lookahead_sz2);
     if (hsd == NULL) {
         fprintf(stderr, "Failed to alloc decoder\n");
@@ -679,38 +697,42 @@ prop_decoder_should_always_make_progress(struct theft *t, void *instance, void *
                 &r->buf[sunk], r->size - sunk, &input_size);
             if (sres < 0) {
                 fprintf(stderr, "Sink error %d\n", sres);
-                return THEFT_TRIAL_ERROR;
+                goto cleanup;
             }
             sunk += input_size;
         } else {
             HSD_finish_res fres = heatshrink_decoder_finish(hsd);
             if (fres == HSDR_FINISH_DONE) {
+                res = THEFT_TRIAL_PASS;
                 break;
             } else if (fres != HSDR_FINISH_MORE) {
                 printf("FAIL %d\n", __LINE__);
-                return THEFT_TRIAL_FAIL;
+                res = THEFT_TRIAL_FAIL;
+                goto cleanup;
             }
         }
 
         size_t output_size = 0;
         HSD_poll_res pres = heatshrink_decoder_poll(hsd,
-            output, sizeof(output), &output_size);
+            output, BUF_SIZE, &output_size);
         if (pres < 0) {
             fprintf(stderr, "poll error: %d\n", pres);
-            return THEFT_TRIAL_ERROR;
+            goto cleanup;
         }
         if (output_size == 0 && sunk == r->size) {
             no_progress++;
             if (no_progress > 2) {
-                return THEFT_TRIAL_FAIL;
+                res = THEFT_TRIAL_FAIL;
+                goto cleanup;
             }
         } else {
             no_progress = 0;
         }
     }
 
+cleanup:
     heatshrink_decoder_free(hsd);
-    return THEFT_TRIAL_PASS;
+    return res;
 }
 
 TEST decoder_should_always_make_progress(void) {
